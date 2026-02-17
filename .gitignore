@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Build output (committed for distribution)
+# main.js is committed intentionally
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Vitest
+coverage/
+
+# Local developer context
+.vault-path
