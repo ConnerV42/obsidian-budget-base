@@ -585,35 +585,17 @@ body.budget-resizing-splitter * {
   white-space: nowrap;
 }
 
-.budget-comp-input-wrap {
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 6px;
-  background: var(--background-primary);
-  padding: 0 6px;
-  min-height: 30px;
-}
-
-.budget-comp-input-wrap-percent {
-  padding-right: 0;
-}
-
-.budget-comp-input-prefix,
-.budget-comp-input-suffix {
-  font-size: 0.84rem;
-  color: var(--text-muted);
-}
-
 .budget-comp-input-inline {
-  width: 108px;
-  border: 0;
-  background: transparent;
   color: var(--text-normal);
-  font-size: 0.92rem;
-  padding: 4px 0;
+  font-family: var(--font-interface);
+  font-size: 1.06rem;
+  font-weight: 600;
+  line-height: 1.1;
+  min-width: 4ch;
+  max-width: 14ch;
+  padding: 0;
   box-shadow: none;
-  text-align: right;
+  text-align: left;
 }
 
 .budget-comp-input-inline:focus {
@@ -621,7 +603,7 @@ body.budget-resizing-splitter * {
 }
 
 .budget-comp-input-inline-percent {
-  width: 58px;
+  max-width: 7ch;
 }
 
 .budget-comp-value {
@@ -644,17 +626,14 @@ body.budget-resizing-splitter * {
 
 .budget-comp-value-clickable {
   cursor: pointer;
-  border-radius: 0;
-  text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--text-muted) 45%, transparent);
-  text-underline-offset: 2px;
-  text-decoration-thickness: 1px;
-  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+  border-radius: 2px;
+  text-decoration: none;
+  transition: color 0.15s ease;
 }
 
-.budget-comp-value-clickable:hover {
+.budget-comp-value-clickable:hover,
+.budget-comp-value-clickable:focus-visible {
   color: color-mix(in srgb, var(--budget-comp-value-color) 78%, var(--interactive-accent, #4f9cf9));
-  text-decoration-color: var(--budget-comp-value-hover);
 }
 
 .budget-comp-value-clickable:focus-visible {
@@ -1539,21 +1518,12 @@ input[type="month"].budget-inline-edit-input:focus {
     padding-bottom: calc(1px * var(--budget-mobile-scale));
   }
 
-  .budget-flow.mobile-layout .budget-comp-input-wrap {
-    min-height: calc(28px * var(--budget-mobile-scale));
-  }
-
   .budget-flow.mobile-layout .budget-comp-input-inline {
-    font-size: max(calc(0.76rem * var(--budget-mobile-scale)), 0.68rem);
-    width: max(calc(80px * var(--budget-mobile-scale)), 58px);
+    font-size: max(calc(0.86rem * var(--budget-mobile-scale)), 0.74rem);
   }
 
   .budget-flow.mobile-layout .budget-comp-input-inline-percent {
-    width: max(calc(46px * var(--budget-mobile-scale)), 38px);
-  }
-
-  .budget-flow.mobile-layout .budget-comp-value {
-    text-underline-offset: 1.5px;
+    max-width: 7ch;
   }
 
   .budget-flow.mobile-layout .budget-header-bar {

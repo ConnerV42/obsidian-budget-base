@@ -242,20 +242,18 @@ export function BudgetHeader({
           <span className="budget-equation-term budget-equation-term-gross">
             <span className="budget-equation-inline-label">Gross</span>
             {editingField === 'gross' ? (
-              <span className="budget-comp-input-wrap">
-                <span className="budget-comp-input-prefix">$</span>
-                <input
-                  ref={compensationInputRef}
-                  type="text"
-                  inputMode="decimal"
-                  className="budget-comp-input-inline budget-inline-edit-input"
-                  value={editValue}
-                  onInput={(e) => applyCompensationDraft((e.target as HTMLInputElement).value)}
-                  onBlur={commitCompensationEdit}
-                  onKeyDown={handleCompensationInputKeyDown}
-                  aria-label="Gross pay"
-                />
-              </span>
+              <input
+                ref={compensationInputRef}
+                type="text"
+                inputMode="decimal"
+                className="budget-comp-input-inline budget-inline-edit-input"
+                value={editValue}
+                size={Math.min(Math.max(editValue.length, 4), 14)}
+                onInput={(e) => applyCompensationDraft((e.target as HTMLInputElement).value)}
+                onBlur={commitCompensationEdit}
+                onKeyDown={handleCompensationInputKeyDown}
+                aria-label="Gross pay"
+              />
             ) : (
               <span
                 role="button"
@@ -277,20 +275,18 @@ export function BudgetHeader({
             <span className="budget-equation-inline-group">
               <span className="budget-equation-paren" aria-hidden="true">(</span>
               {editingField === 'taxPercentBps' ? (
-                <span className="budget-comp-input-wrap budget-comp-input-wrap-percent">
-                  <input
-                    ref={compensationInputRef}
-                    type="text"
-                    inputMode="decimal"
-                    className="budget-comp-input-inline budget-comp-input-inline-percent budget-inline-edit-input"
-                    value={editValue}
-                    onInput={(e) => applyCompensationDraft((e.target as HTMLInputElement).value)}
-                    onBlur={commitCompensationEdit}
-                    onKeyDown={handleCompensationInputKeyDown}
-                    aria-label="Tax percent"
-                  />
-                  <span className="budget-comp-input-suffix">%</span>
-                </span>
+                <input
+                  ref={compensationInputRef}
+                  type="text"
+                  inputMode="decimal"
+                  className="budget-comp-input-inline budget-comp-input-inline-percent budget-inline-edit-input"
+                  value={editValue}
+                  size={Math.min(Math.max(editValue.length, 4), 7)}
+                  onInput={(e) => applyCompensationDraft((e.target as HTMLInputElement).value)}
+                  onBlur={commitCompensationEdit}
+                  onKeyDown={handleCompensationInputKeyDown}
+                  aria-label="Tax percent"
+                />
               ) : (
                 <span
                   role="button"
@@ -316,20 +312,18 @@ export function BudgetHeader({
             <span className="budget-equation-inline-group">
               <span className="budget-equation-paren" aria-hidden="true">(</span>
               {editingField === 'retirementPercentBps' ? (
-                <span className="budget-comp-input-wrap budget-comp-input-wrap-percent">
-                  <input
-                    ref={compensationInputRef}
-                    type="text"
-                    inputMode="decimal"
-                    className="budget-comp-input-inline budget-comp-input-inline-percent budget-inline-edit-input"
-                    value={editValue}
-                    onInput={(e) => applyCompensationDraft((e.target as HTMLInputElement).value)}
-                    onBlur={commitCompensationEdit}
-                    onKeyDown={handleCompensationInputKeyDown}
-                    aria-label="Retirement percent"
-                  />
-                  <span className="budget-comp-input-suffix">%</span>
-                </span>
+                <input
+                  ref={compensationInputRef}
+                  type="text"
+                  inputMode="decimal"
+                  className="budget-comp-input-inline budget-comp-input-inline-percent budget-inline-edit-input"
+                  value={editValue}
+                  size={Math.min(Math.max(editValue.length, 4), 7)}
+                  onInput={(e) => applyCompensationDraft((e.target as HTMLInputElement).value)}
+                  onBlur={commitCompensationEdit}
+                  onKeyDown={handleCompensationInputKeyDown}
+                  aria-label="Retirement percent"
+                />
               ) : (
                 <span
                   role="button"
