@@ -92,6 +92,11 @@ export class BudgetFileService {
 type: budget
 month: ${month}
 income: ${settings.defaultIncome}
+compensation:
+  version: 2
+  gross: ${settings.defaultIncome}
+  taxPercentBps: 0
+  retirementPercentBps: 0
 ---
 
 ${categoryContent}`;

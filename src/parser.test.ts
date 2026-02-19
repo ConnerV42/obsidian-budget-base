@@ -19,7 +19,7 @@ Just some content.`;
       expect(parseBudgetMarkdown(content)).toBeNull();
     });
 
-    it('returns null when fallback YAML parser sees unsupported frontmatter syntax', () => {
+    it('parses list-based frontmatter syntax and preserves unknown keys', () => {
       const content = `---
 type: budget
 aliases:
@@ -29,7 +29,9 @@ aliases:
 ## Items
 - [bill] Rent: 1800`;
 
-      expect(parseBudgetMarkdown(content)).toBeNull();
+      const parsed = parseBudgetMarkdown(content);
+      expect(parsed).not.toBeNull();
+      expect(parsed?._frontmatterPassthrough?.topLevel?.aliases).toEqual(['monthly-budget']);
     });
 
     it('parses basic budget file', () => {
@@ -64,6 +66,82 @@ income: 8000
       
       expect(result?.categories[1].name).toBe('Expenses');
       expect(result?.categories[1].items).toHaveLength(1);
+    });
+
+    it('parses v2 compensation and derives income from computed take-home', () => {
+      const content = `---
+type: budget
+month: 2026-02
+income: 9999
+compensation:
+  version: 2
+  gross: 8000
+  taxPercentBps: 2275
+  retirementPercentBps: 1600
+---
+
+## Items
+- [bill] Rent: 2000`;
+
+      const result = parseBudgetMarkdown(content);
+      expect(result?.compensation).toEqual({
+        version: 2,
+        gross: 8000,
+        taxPercentBps: 2275,
+        retirementPercentBps: 1600
+      });
+      expect(result?.income).toBe(4900);
+    });
+
+    it('migrates legacy deduction-array compensation and derives take-home', () => {
+      const content = `---
+type: budget
+month: 2026-02
+income: 9999
+compensation:
+  version: 1
+  gross: 8000
+  deductions:
+    -
+      id: d001
+      label: Tax
+      mode: percent
+      percentBps: 2275
+      amount: 0
+    -
+      id: d002
+      label: Retirement
+      mode: percent
+      percentBps: 1600
+      amount: 0
+---
+
+## Items
+- [bill] Rent: 2000`;
+
+      const result = parseBudgetMarkdown(content);
+      expect(result?.compensation).toEqual({
+        version: 2,
+        gross: 8000,
+        taxPercentBps: 2275,
+        retirementPercentBps: 1600
+      });
+      expect(result?.income).toBe(4900);
+    });
+
+    it('falls back to legacy income when compensation is missing', () => {
+      const content = `---
+type: budget
+month: 2026-02
+income: 3200
+---
+
+## Items
+- [bill] Rent: 2000`;
+
+      const result = parseBudgetMarkdown(content);
+      expect(result?.compensation).toBeUndefined();
+      expect(result?.income).toBe(3200);
     });
 
     it('parses chart size from frontmatter', () => {

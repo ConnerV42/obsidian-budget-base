@@ -7,7 +7,10 @@
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs production",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "bump:manifest": "node scripts/bump-manifest-version.mjs",
+    "verify:deploy": "node scripts/verify-plugin-copy.mjs",
+    "deploy:mobile-ready": "npm run bump:manifest && make deploy && make verify-deploy"
   },
   "keywords": [
     "obsidian",

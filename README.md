@@ -76,9 +76,30 @@ export VAULT="$HOME/path/to/your/vault"
 # One command: build + deploy
 make deploy
 
+# Verify deployed files match local build output
+make verify-deploy
+
+# Mobile-safe release flow (Obsidian Sync): bump version + deploy + verify
+make release-mobile-ready
+
+# Diagnose stale mobile plugin UI without writing files
+make diagnose-mobile-stale
+
 # Or full setup from scratch
 make setup
 ```
+
+### Mobile via Obsidian Sync (stale UI runbook)
+
+If desktop shows new UI but mobile still shows old plugin UX:
+
+1. Run `make release-mobile-ready` from this repo.
+2. Confirm `make verify-deploy` passes.
+3. Wait for Obsidian Sync to finish on desktop.
+4. Open mobile Obsidian and wait for sync to finish.
+5. If still stale: disable and re-enable `BudgetBase` on mobile.
+6. If still stale: fully close and reopen mobile Obsidian.
+7. Run `make diagnose-mobile-stale` to confirm deployed marker/version/hash.
 
 ## Usage
 

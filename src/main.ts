@@ -535,6 +535,14 @@ function cloneBudgetDataForMonth(source: BudgetData, month: string): BudgetData 
   return {
     ...source,
     month,
+    compensation: source.compensation
+      ? {
+        version: source.compensation.version,
+        gross: source.compensation.gross,
+        taxPercentBps: source.compensation.taxPercentBps,
+        retirementPercentBps: source.compensation.retirementPercentBps
+      }
+      : undefined,
     categories: source.categories.map((category) => ({
       ...category,
       items: category.items.map((item) => ({ ...item }))
@@ -561,6 +569,13 @@ function cloneBudgetDataForMonth(source: BudgetData, month: string): BudgetData 
           : undefined,
         layout: source._frontmatterPassthrough.layout
           ? { ...source._frontmatterPassthrough.layout }
+          : undefined,
+        compensation: source._frontmatterPassthrough.compensation
+          ? {
+            topLevel: source._frontmatterPassthrough.compensation.topLevel
+              ? { ...source._frontmatterPassthrough.compensation.topLevel }
+              : undefined
+          }
           : undefined
       }
       : undefined

@@ -1,7 +1,7 @@
 {
   "id": "budgetbase",
   "name": "BudgetBase",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "minAppVersion": "1.0.0",
   "description": "Budget allocation tracking with rich visuals. Markdown underneath, beautiful UI on top.",
   "author": "Conner Verret",

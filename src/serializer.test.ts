@@ -149,6 +149,40 @@ describe('serializeBudgetMarkdown', () => {
     expect(serialized).toContain('size: 280');
   });
 
+  it('serializes compensation and derives income from computed take-home', () => {
+    const data: BudgetData = {
+      type: 'budget',
+      month: '2026-02',
+      income: 0,
+      compensation: {
+        version: 2,
+        gross: 8200,
+        taxPercentBps: 2275,
+        retirementPercentBps: 1600
+      },
+      categories: [
+        {
+          name: 'Items',
+          items: [{ tag: 'bill', name: 'Rent', amount: 1200 }]
+        }
+      ]
+    };
+
+    const serialized = serializeBudgetMarkdown(data);
+    const parsed = parseBudgetMarkdown(serialized);
+
+    expect(serialized).toContain('compensation:');
+    expect(serialized).toContain('taxPercentBps: 2275');
+    expect(serialized).toContain('retirementPercentBps: 1600');
+    expect(parsed?.income).toBe(5022.5);
+    expect(parsed?.compensation).toEqual({
+      version: 2,
+      gross: 8200,
+      taxPercentBps: 2275,
+      retirementPercentBps: 1600
+    });
+  });
+
   it('preserves unknown top-level and nested frontmatter keys across updates', () => {
     const source = `---
 type: budget
@@ -218,5 +252,45 @@ tagColors:
     const serialized = serializeBudgetMarkdown(updated);
     expect(serialized).toContain('metadata: true');
     expect(serialized).toContain('Flex: "#123456"');
+  });
+
+  it('preserves unknown top-level compensation keys while writing v2 shape', () => {
+    const source = `---
+type: budget
+month: 2026-02
+income: 5000
+compensation:
+  version: 1
+  gross: 8000
+  provider: "manual"
+  deductions:
+    -
+      id: d001
+      label: Tax
+      mode: percent
+      percentBps: 2000
+      amount: 0
+---
+
+## Items
+- [bill] Rent: 1800
+`;
+
+    const parsed = parseBudgetMarkdown(source);
+    expect(parsed).not.toBeNull();
+
+    const updated: BudgetData = {
+      ...parsed!,
+      compensation: {
+        ...parsed!.compensation!,
+        taxPercentBps: 2275,
+        retirementPercentBps: 1200
+      }
+    };
+
+    const serialized = serializeBudgetMarkdown(updated);
+    expect(serialized).toContain('provider: "manual"');
+    expect(serialized).toContain('taxPercentBps: 2275');
+    expect(serialized).toContain('retirementPercentBps: 1200');
   });
 });

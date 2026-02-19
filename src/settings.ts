@@ -94,8 +94,8 @@ export class BudgetFlowSettingTab extends PluginSettingTab {
     containerEl.createEl('h3', { text: 'Display' });
 
     new Setting(containerEl)
-      .setName('Default income')
-      .setDesc('Pre-fill this income when creating new budgets')
+      .setName('Default gross')
+      .setDesc('Pre-fill this gross amount when creating new budgets')
       .addText((text) =>
         text
           .setPlaceholder('0')

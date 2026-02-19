@@ -135,6 +135,10 @@ describe('budget file service', () => {
     expect(createdContent).toContain('type: budget');
     expect(createdContent).toContain('month: 2026-02');
     expect(createdContent).toContain('income: 8366');
+    expect(createdContent).toContain('compensation:');
+    expect(createdContent).toContain('gross: 8366');
+    expect(createdContent).toContain('taxPercentBps: 0');
+    expect(createdContent).toContain('retirementPercentBps: 0');
     expect(createdContent).toContain('## Savings');
     expect(createdContent).toContain('- [vault] Item: 0');
 

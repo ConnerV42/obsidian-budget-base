@@ -1,11 +1,17 @@
 import { h } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { BudgetData, BudgetItem, calculateTotals } from '../parser';
+import { BudgetData, BudgetItem, CompensationData, calculateTotals } from '../parser';
 import { BudgetHeader } from './BudgetHeader';
 import { ItemList } from './ItemList';
 import { AllocationPieChart } from './AllocationPieChart';
 import { normalizeTag, normalizeTagColorMap } from '../tagUtils';
 import { BudgetConflictState, ConflictResolutionStrategy } from '../services/budgetPersistence';
+import {
+  applyComputedIncome,
+  cloneCompensation,
+  computeCompensation,
+  createStarterCompensationZero
+} from '../compensation';
 import {
   calculatePinchScale,
   distanceBetweenPoints,
@@ -139,7 +145,16 @@ export function BudgetView({
     startScale: mobileScale
   });
 
-  const totals = calculateTotals(data);
+  const hasPersistedCompensation = Boolean(data.compensation);
+  const effectiveCompensation = data.compensation
+    ? cloneCompensation(data.compensation)
+    : createStarterCompensationZero();
+  const compensationComputation = computeCompensation(effectiveCompensation);
+  const totals = calculateTotals({
+    ...data,
+    income: compensationComputation.takeHome
+  });
+  const allocationsLocked = !hasPersistedCompensation;
   const flattenItems = (budgetData: BudgetData): BudgetItem[] =>
     budgetData.categories.flatMap(cat => cat.items);
   const normalizedTagColors = normalizeTagColorMap(data.tagColors);
@@ -150,6 +165,16 @@ export function BudgetView({
   const chartSize = clampChartSize(chartPaneWidth > 0 ? chartPaneWidth - CHART_WIDTH_OFFSET : undefined);
   const allocatedPercent = totals.income > 0 ? (totals.totalAllocated / totals.income) * 100 : 0;
   const mobileEdgeIconProgress = Math.max(0, Math.min(allocatedPercent, 100));
+
+  const handleCompensationChange = (update: (prev: CompensationData) => CompensationData) => {
+    onUpdate((prev) => {
+      const baseCompensation = prev.compensation
+        ? cloneCompensation(prev.compensation)
+        : createStarterCompensationZero();
+      const nextCompensation = update(baseCompensation);
+      return applyComputedIncome(prev, nextCompensation);
+    });
+  };
 
   const persistSplitRatio = (ratio: number) => {
     const normalized = normalizeStoredSplitRatio(ratio);
@@ -390,6 +415,7 @@ export function BudgetView({
 
   // When updating, we store everything in a single "Items" category
   const handleItemUpdate = (index: number, field: 'tag' | 'name' | 'amount', value: string | number) => {
+    if (allocationsLocked) return;
     onUpdate((prev) => {
       const prevItems = flattenItems(prev);
       const newItems = [...prevItems];
@@ -413,6 +439,7 @@ export function BudgetView({
   };
 
   const handleAddItem = (tag: string, name: string, amount: number) => {
+    if (allocationsLocked) return;
     onUpdate((prev) => {
       const prevItems = flattenItems(prev);
       const newItems = [...prevItems, { tag, name, amount }];
@@ -424,6 +451,7 @@ export function BudgetView({
   };
 
   const handleDeleteItem = (index: number) => {
+    if (allocationsLocked) return;
     onUpdate((prev) => {
       const prevItems = flattenItems(prev);
       const newItems = prevItems.filter((_, i) => i !== index);
@@ -435,6 +463,7 @@ export function BudgetView({
   };
 
   const handleReorderItem = (fromIndex: number, toIndex: number) => {
+    if (allocationsLocked) return;
     setMobileSortOption('none');
     onUpdate((prev) => {
       const prevItems = flattenItems(prev);
@@ -450,6 +479,7 @@ export function BudgetView({
   };
 
   const handleReorderAll = (newItems: BudgetItem[]) => {
+    if (allocationsLocked) return;
     setMobileSortOption('none');
     onUpdate((prev) => ({
       ...prev,
@@ -458,6 +488,7 @@ export function BudgetView({
   };
 
   const sortItems = (sortBy: SortOption) => {
+    if (allocationsLocked) return;
     if (sortBy === 'none') return;
 
     onUpdate((prev) => {
@@ -482,10 +513,6 @@ export function BudgetView({
         categories: [{ name: 'Items', items: sorted }]
       };
     });
-  };
-
-  const handleIncomeUpdate = (newIncome: number) => {
-    onUpdate(prev => ({ ...prev, income: newIncome }));
   };
 
   const handleMonthUpdate = (newMonth: string) => {
@@ -586,6 +613,7 @@ export function BudgetView({
   };
 
   const handleTagColorChange = (tag: string, color: string) => {
+    if (allocationsLocked) return;
     const normalizedTag = normalizeTag(tag);
     onUpdate((prev) => ({
       ...prev,
@@ -597,6 +625,7 @@ export function BudgetView({
   };
 
   const handleTagRename = (oldTag: string, newTag: string) => {
+    if (allocationsLocked) return;
     const normalizedOld = normalizeTag(oldTag);
     const normalizedNew = normalizeTag(newTag);
 
@@ -625,6 +654,7 @@ export function BudgetView({
   };
 
   const handleTagDelete = (tag: string) => {
+    if (allocationsLocked) return;
     const normalizedTag = normalizeTag(tag);
     onUpdate((prev) => {
       const prevItems = flattenItems(prev);
@@ -767,10 +797,13 @@ export function BudgetView({
       )}
       <BudgetHeader
         month={data.month}
-        income={totals.income}
+        takeHome={totals.income}
         allocated={totals.totalAllocated}
         unallocated={totals.unallocated}
-        onIncomeUpdate={handleIncomeUpdate}
+        compensation={effectiveCompensation}
+        compensationComputation={compensationComputation}
+        isCompensationVirtual={!hasPersistedCompensation}
+        onCompensationChange={handleCompensationChange}
         onMonthUpdate={handleMonthUpdate}
       />
 
@@ -797,6 +830,7 @@ export function BudgetView({
           <select
             className="budget-mobile-sort-select"
             aria-label="Sort items"
+            disabled={allocationsLocked}
             value={mobileSortOption}
             onChange={(e) => {
               const sortBy = (e.target as HTMLSelectElement).value as SortOption;
@@ -822,6 +856,8 @@ export function BudgetView({
             <ItemList
               items={allItems}
               tagColors={normalizedTagColors}
+              disabled={allocationsLocked}
+              disabledMessage="Compensation is required before allocation editing. Set gross/tax/retirement above to initialize frontmatter."
               onItemUpdate={handleItemUpdate}
               onAddItem={handleAddItem}
               onDeleteItem={handleDeleteItem}

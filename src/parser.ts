@@ -3,6 +3,7 @@
  */
 import { normalizeTag, normalizeTagColorMap } from './tagUtils';
 import { parseYamlObject, stringifyYamlObject } from './yamlAdapter';
+import { computeCompensation, normalizeCompensation } from './compensation';
 
 export interface BudgetItem {
   tag: string;      // vault, roth, bill, sub, flex, etc.
@@ -15,10 +16,18 @@ export interface BudgetCategory {
   items: BudgetItem[];
 }
 
+export interface CompensationData {
+  version: 2;
+  gross: number;
+  taxPercentBps: number;
+  retirementPercentBps: number;
+}
+
 export interface BudgetData {
   type: 'budget';
   month: string;          // YYYY-MM format
   income: number;
+  compensation?: CompensationData;
   categories: BudgetCategory[];
   tagColors?: Record<string, string>;  // Custom tag colors
   chart?: {
@@ -35,15 +44,30 @@ interface BudgetFrontmatterPassthrough {
   tagColors?: Record<string, unknown>;
   chart?: Record<string, unknown>;
   layout?: Record<string, unknown>;
+  compensation?: {
+    topLevel?: Record<string, unknown>;
+  };
 }
 
 const MIN_LAYOUT_SPLIT_RATIO = 0.22;
 const MAX_LAYOUT_SPLIT_RATIO = 0.55;
-const KNOWN_FRONTMATTER_KEYS = new Set(['type', 'month', 'income', 'tagColors', 'chart', 'layout']);
+const KNOWN_FRONTMATTER_KEYS = new Set(['type', 'month', 'income', 'compensation', 'tagColors', 'chart', 'layout']);
+const KNOWN_COMPENSATION_KEYS = new Set([
+  'version',
+  'gross',
+  'taxPercentBps',
+  'retirementPercentBps',
+  'deductions'
+]);
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
+}
+
+function asArray(value: unknown): unknown[] | null {
+  if (!Array.isArray(value)) return null;
+  return value;
 }
 
 function parseOptionalPositiveNumber(value: unknown): number | undefined {
@@ -58,6 +82,12 @@ function hasRecordEntries(value: Record<string, unknown> | undefined): boolean {
   return Boolean(value) && Object.keys(value).length > 0;
 }
 
+function hasCompensationPassthroughEntries(
+  value: BudgetFrontmatterPassthrough['compensation'] | undefined
+): boolean {
+  return hasRecordEntries(value?.topLevel);
+}
+
 /**
  * Parse a number from string, handling commas, dollar signs, and negatives
  */
@@ -65,6 +95,97 @@ function parseAmount(str: string): number {
   // Remove $, commas, and whitespace, then parse
   const cleaned = str.replace(/[$,\s]/g, '');
   return parseFloat(cleaned) || 0;
+}
+
+interface ParsedCompensationResult {
+  compensation?: CompensationData;
+  passthrough?: BudgetFrontmatterPassthrough['compensation'];
+}
+
+function parseLegacyCompensationPercents(compensationRaw: Record<string, unknown>): {
+  taxPercentBps: number;
+  retirementPercentBps: number;
+} {
+  const gross = parseAmount(String(compensationRaw.gross ?? 0));
+  const deductionsRaw = asArray(compensationRaw.deductions) || [];
+  const lines: Array<{ index: number; label: string; percentBps: number }> = [];
+
+  for (const [index, entry] of deductionsRaw.entries()) {
+    const line = asRecord(entry);
+    if (!line) continue;
+
+    const label = String(line.label ?? '').trim();
+    const mode = String(line.mode ?? '').trim().toLowerCase();
+
+    let percentBps: number | null = null;
+    if (mode === 'percent') {
+      const parsed = Number(line.percentBps ?? 0);
+      percentBps = Number.isFinite(parsed) ? parsed : 0;
+    } else if (mode === 'amount') {
+      const parsedAmount = parseAmount(String(line.amount ?? 0));
+      percentBps = gross > 0 ? (parsedAmount / gross) * 10000 : 0;
+    } else if (line.percentBps !== undefined) {
+      const parsed = Number(line.percentBps);
+      percentBps = Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    if (percentBps === null) continue;
+    lines.push({ index, label, percentBps });
+  }
+
+  const taxLine = lines.find((line) => /tax/i.test(line.label));
+  const retirementLine = lines.find((line) => /retire/i.test(line.label));
+
+  let taxPercentBps = taxLine?.percentBps ?? lines[0]?.percentBps ?? 0;
+  let retirementPercentBps = retirementLine?.percentBps ?? 0;
+
+  if (!retirementLine || retirementLine.index === taxLine?.index) {
+    const taxIndex = taxLine?.index ?? lines[0]?.index ?? -1;
+    const fallbackRetirement = lines.find((line) => line.index !== taxIndex);
+    retirementPercentBps = fallbackRetirement?.percentBps ?? lines[1]?.percentBps ?? 0;
+  }
+
+  return { taxPercentBps, retirementPercentBps };
+}
+
+function parseCompensationData(raw: unknown): ParsedCompensationResult {
+  const compensationRaw = asRecord(raw);
+  if (!compensationRaw) {
+    return {};
+  }
+
+  const passthroughTopLevel: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(compensationRaw)) {
+    if (!KNOWN_COMPENSATION_KEYS.has(key)) {
+      passthroughTopLevel[key] = value;
+    }
+  }
+
+  const hasLegacyDeductions = Array.isArray(compensationRaw.deductions)
+    && !Object.prototype.hasOwnProperty.call(compensationRaw, 'taxPercentBps')
+    && !Object.prototype.hasOwnProperty.call(compensationRaw, 'retirementPercentBps');
+
+  const legacyPercents = hasLegacyDeductions
+    ? parseLegacyCompensationPercents(compensationRaw)
+    : { taxPercentBps: Number(compensationRaw.taxPercentBps ?? 0), retirementPercentBps: Number(compensationRaw.retirementPercentBps ?? 0) };
+
+  const normalizedCompensation = normalizeCompensation({
+    version: 2,
+    gross: parseAmount(String(compensationRaw.gross ?? 0)),
+    taxPercentBps: legacyPercents.taxPercentBps,
+    retirementPercentBps: legacyPercents.retirementPercentBps
+  });
+
+  const passthrough: BudgetFrontmatterPassthrough['compensation'] | undefined = hasRecordEntries(passthroughTopLevel)
+    ? {
+      topLevel: hasRecordEntries(passthroughTopLevel) ? passthroughTopLevel : undefined
+    }
+    : undefined;
+
+  return {
+    compensation: normalizedCompensation,
+    passthrough
+  };
 }
 
 /**
@@ -92,7 +213,7 @@ export function parseBudgetMarkdown(content: string): BudgetData | null {
   const month = typeof monthRaw === 'string'
     ? monthRaw.trim()
     : String(monthRaw ?? '').trim();
-  const income = parseAmount(String(rawFrontmatter.income ?? 0));
+  const fallbackIncome = parseAmount(String(rawFrontmatter.income ?? 0));
 
   const tagColors: Record<string, string> = {};
   const passthroughTagColors: Record<string, unknown> = {};
@@ -137,16 +258,28 @@ export function parseBudgetMarkdown(content: string): BudgetData | null {
     }
   }
 
+  const parsedCompensation = parseCompensationData(rawFrontmatter.compensation);
+  const compensationComputation = parsedCompensation.compensation
+    ? computeCompensation(parsedCompensation.compensation)
+    : null;
+  const income = compensationComputation
+    ? compensationComputation.takeHome
+    : fallbackIncome;
+
   const passthrough: BudgetFrontmatterPassthrough | undefined =
     hasRecordEntries(passthroughTopLevel)
     || hasRecordEntries(passthroughTagColors)
     || hasRecordEntries(passthroughChart)
     || hasRecordEntries(passthroughLayout)
+    || hasCompensationPassthroughEntries(parsedCompensation.passthrough)
       ? {
         topLevel: hasRecordEntries(passthroughTopLevel) ? passthroughTopLevel : undefined,
         tagColors: hasRecordEntries(passthroughTagColors) ? passthroughTagColors : undefined,
         chart: hasRecordEntries(passthroughChart) ? passthroughChart : undefined,
-        layout: hasRecordEntries(passthroughLayout) ? passthroughLayout : undefined
+        layout: hasRecordEntries(passthroughLayout) ? passthroughLayout : undefined,
+        compensation: hasCompensationPassthroughEntries(parsedCompensation.passthrough)
+          ? parsedCompensation.passthrough
+          : undefined
       }
       : undefined;
 
@@ -206,6 +339,7 @@ export function parseBudgetMarkdown(content: string): BudgetData | null {
     type: 'budget',
     month,
     income,
+    compensation: parsedCompensation.compensation,
     categories,
     tagColors: Object.keys(tagColors).length > 0 ? tagColors : undefined,
     chart: chartSize !== undefined ? { size: chartSize } : undefined,
@@ -216,12 +350,30 @@ export function parseBudgetMarkdown(content: string): BudgetData | null {
 
 export function serializeBudgetMarkdown(data: BudgetData): string {
   const passthrough = data._frontmatterPassthrough;
+  const normalizedCompensation = data.compensation
+    ? normalizeCompensation(data.compensation)
+    : undefined;
+  const computedIncome = normalizedCompensation
+    ? computeCompensation(normalizedCompensation).takeHome
+    : data.income;
+
   const frontmatter: Record<string, unknown> = {
     ...(passthrough?.topLevel || {}),
     type: data.type,
     month: data.month,
-    income: data.income
+    income: computedIncome
   };
+
+  if (normalizedCompensation) {
+    const compensationPassthrough = passthrough?.compensation;
+    frontmatter.compensation = {
+      ...(compensationPassthrough?.topLevel || {}),
+      version: 2,
+      gross: normalizedCompensation.gross,
+      taxPercentBps: normalizedCompensation.taxPercentBps,
+      retirementPercentBps: normalizedCompensation.retirementPercentBps
+    };
+  }
 
   const normalizedTagColors = normalizeTagColorMap(data.tagColors);
   if (Object.keys(normalizedTagColors).length > 0) {

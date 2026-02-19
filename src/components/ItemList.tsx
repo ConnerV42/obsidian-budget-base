@@ -7,6 +7,8 @@ import { EditCommitGuard } from './editCommitGuard';
 interface ItemListProps {
   items: BudgetItem[];
   tagColors: Record<string, string>;
+  disabled?: boolean;
+  disabledMessage?: string;
   onItemUpdate: (index: number, field: 'tag' | 'name' | 'amount', value: string | number) => void;
   onAddItem: (tag: string, name: string, amount: number) => void;
   onDeleteItem: (index: number) => void;
@@ -42,6 +44,8 @@ const getContrastTextColor = (bgColor: string): string => {
 export function ItemList({ 
   items,
   tagColors,
+  disabled = false,
+  disabledMessage = 'Set compensation first to unlock allocation editing.',
   onItemUpdate, 
   onAddItem, 
   onDeleteItem, 
@@ -74,6 +78,7 @@ export function ItemList({
   };
 
   const handleSort = (sortBy: SortOption) => {
+    if (disabled) return;
     if (sortBy === 'none') return;
     
     const sorted = [...items].sort((a, b) => {
@@ -131,6 +136,7 @@ export function ItemList({
   };
 
   const startEditing = (index: number, field: 'tag' | 'name' | 'amount', currentValue: string | number) => {
+    if (disabled) return;
     editCommitGuardRef.current.startEditing();
     setFocusedRowIndex(index);
     setPendingDeleteIndex(null);
@@ -139,6 +145,7 @@ export function ItemList({
   };
 
   const saveEdit = () => {
+    if (disabled) return;
     if (!editing) return;
     if (!editCommitGuardRef.current.beginCommit()) return;
     
@@ -169,6 +176,7 @@ export function ItemList({
   };
 
   const navigateField = (direction: 'next' | 'prev') => {
+    if (disabled) return;
     if (!editing) return;
     
     const { index, field } = editing;
@@ -204,8 +212,19 @@ export function ItemList({
     }
   }, [editing]);
 
+  useEffect(() => {
+    if (!disabled) return;
+    setEditing(null);
+    setIsAdding(false);
+    setPendingDeleteIndex(null);
+    setFocusedRowIndex(null);
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  }, [disabled]);
+
   // PointerEvent-based drag and drop (works on both mouse and touch)
   const handlePointerDown = (e: PointerEvent, index: number) => {
+    if (disabled) return;
     if (e.button !== 0) return;
     e.preventDefault();
 
@@ -319,6 +338,7 @@ export function ItemList({
   };
 
   const handleAddItem = () => {
+    if (disabled) return;
     if (newItem.name.trim()) {
       const amount = parseFloat(newItem.amount.replace(/[^0-9.-]/g, '')) || 0;
       const tag = capitalizeFirst(newItem.tag.trim()) || 'Item';
@@ -338,6 +358,7 @@ export function ItemList({
   };
 
   const handleDeleteClick = (e: h.JSX.TargetedMouseEvent<HTMLButtonElement>, index: number) => {
+    if (disabled) return;
     e.stopPropagation();
     setFocusedRowIndex(index);
     if (pendingDeleteIndex === index) {
@@ -354,6 +375,25 @@ export function ItemList({
   };
 
   const renderEditableField = (item: BudgetItem, index: number, field: 'tag' | 'name' | 'amount') => {
+    if (disabled) {
+      if (field === 'amount') {
+        return (
+          <span className="budget-item-amount">
+            {formatCurrency(item.amount)}
+          </span>
+        );
+      }
+      if (field === 'tag') {
+        const bgColor = getColor(item.tag);
+        return (
+          <span className="budget-item-tag" style={{ backgroundColor: bgColor, color: getContrastTextColor(bgColor) }}>
+            {item.tag}
+          </span>
+        );
+      }
+      return <span className="budget-item-name">{item.name}</span>;
+    }
+
     const isEditing = editing?.index === index && editing?.field === field;
     
     if (field === 'tag') {
@@ -439,13 +479,18 @@ export function ItemList({
   };
 
   return (
-    <div className="budget-item-list" ref={listRef}>
+    <div className={`budget-item-list ${disabled ? 'locked' : ''}`} ref={listRef}>
+      {disabled && (
+        <div className="budget-item-lock-note" role="note">
+          {disabledMessage}
+        </div>
+      )}
       <div className="budget-sort-controls">
         <span className="budget-sort-label">Sort:</span>
-        <button className="budget-sort-btn" onClick={() => handleSort('amount-desc')}>$ High→Low</button>
-        <button className="budget-sort-btn" onClick={() => handleSort('amount-asc')}>$ Low→High</button>
-        <button className="budget-sort-btn" onClick={() => handleSort('tag')}>Tag</button>
-        <button className="budget-sort-btn" onClick={() => handleSort('name')}>Name</button>
+        <button className="budget-sort-btn" disabled={disabled} onClick={() => handleSort('amount-desc')}>$ High→Low</button>
+        <button className="budget-sort-btn" disabled={disabled} onClick={() => handleSort('amount-asc')}>$ Low→High</button>
+        <button className="budget-sort-btn" disabled={disabled} onClick={() => handleSort('tag')}>Tag</button>
+        <button className="budget-sort-btn" disabled={disabled} onClick={() => handleSort('name')}>Name</button>
       </div>
       {items.map((item, index) => (
         <div
@@ -472,6 +517,7 @@ export function ItemList({
             {renderEditableField(item, index, 'amount')}
             <button
               className={`budget-item-delete ${pendingDeleteIndex === index ? 'confirming' : ''}`}
+              disabled={disabled}
               onClick={(e) => handleDeleteClick(e, index)}
               title={pendingDeleteIndex === index ? 'Tap again to confirm delete' : 'Delete item'}
             >
@@ -481,7 +527,7 @@ export function ItemList({
         </div>
       ))}
       
-      {isAdding ? (
+      {!disabled && isAdding ? (
         <div className="budget-item budget-item-adding">
           <div className="budget-item-left">
             <span className="budget-item-drag-handle" style={{ opacity: 0 }}>⋮⋮</span>
@@ -531,11 +577,12 @@ export function ItemList({
             <button className="budget-item-cancel" onClick={() => setIsAdding(false)}>×</button>
           </div>
         </div>
-      ) : (
+      ) : !disabled ? (
         <button className="budget-add-item-btn" onClick={() => setIsAdding(true)}>
           + Add item
         </button>
-      )}
+      ) : null
+      }
     </div>
   );
 }

@@ -108,71 +108,209 @@ function isUnsupportedYamlToken(value: string): boolean {
   if (!trimmed) return false;
   if (/^(\||>)[+-]?\d*$/.test(trimmed)) return true;
   if (trimmed.startsWith('[') || trimmed.startsWith('{')) return true;
+  if (trimmed.startsWith('&') || trimmed.startsWith('*')) return true;
   return false;
+}
+
+interface ParsedYamlNode {
+  value: unknown;
+  nextIndex: number;
+}
+
+function getLineIndent(line: string): number {
+  let indent = 0;
+  while (indent < line.length && line[indent] === ' ') {
+    indent += 1;
+  }
+
+  if (indent < line.length && line[indent] === '\t') {
+    throw new Error('Tabs are not supported in YAML fallback parser.');
+  }
+
+  if (indent % 2 !== 0) {
+    throw new Error('YAML fallback parser requires two-space indentation.');
+  }
+
+  return indent;
+}
+
+function skipSkippableLines(lines: string[], startIndex: number): number {
+  let index = startIndex;
+  while (index < lines.length && isSkippableYamlLine(lines[index])) {
+    index += 1;
+  }
+  return index;
+}
+
+function parseYamlMappingBlock(
+  lines: string[],
+  startIndex: number,
+  indent: number,
+  seed: Record<string, unknown> = {}
+): ParsedYamlNode {
+  const result: Record<string, unknown> = seed;
+  let index = startIndex;
+
+  while (index < lines.length) {
+    index = skipSkippableLines(lines, index);
+    if (index >= lines.length) {
+      break;
+    }
+
+    const line = lines[index];
+    const lineIndent = getLineIndent(line);
+    if (lineIndent < indent) {
+      break;
+    }
+    if (lineIndent > indent) {
+      throw new Error('Unexpected indentation in YAML fallback parser.');
+    }
+
+    const trimmed = line.slice(indent);
+    if (trimmed.startsWith('-')) {
+      throw new Error('Unexpected list item in mapping block.');
+    }
+
+    const parsed = parseYamlKeyValueLine(trimmed);
+    if (!parsed || !parsed.key) {
+      throw new Error('Failed to parse mapping entry in YAML fallback parser.');
+    }
+
+    const valueText = parsed.value.trim();
+    index += 1;
+
+    if (!valueText) {
+      const nested = parseYamlBlock(lines, index, indent + 2);
+      if (!nested) {
+        result[parsed.key] = {};
+        continue;
+      }
+      result[parsed.key] = nested.value;
+      index = nested.nextIndex;
+      continue;
+    }
+
+    if (isUnsupportedYamlToken(valueText)) {
+      throw new Error('Unsupported YAML token in fallback parser.');
+    }
+
+    result[parsed.key] = parseYamlScalar(parsed.value);
+  }
+
+  return { value: result, nextIndex: index };
+}
+
+function parseYamlSequenceBlock(lines: string[], startIndex: number, indent: number): ParsedYamlNode {
+  const result: unknown[] = [];
+  let index = startIndex;
+
+  while (index < lines.length) {
+    index = skipSkippableLines(lines, index);
+    if (index >= lines.length) {
+      break;
+    }
+
+    const line = lines[index];
+    const lineIndent = getLineIndent(line);
+    if (lineIndent < indent) {
+      break;
+    }
+    if (lineIndent > indent) {
+      throw new Error('Unexpected indentation in YAML list block.');
+    }
+
+    const trimmed = line.slice(indent);
+    if (!(trimmed === '-' || trimmed.startsWith('- '))) {
+      break;
+    }
+
+    const inlineValue = trimmed === '-'
+      ? ''
+      : trimmed.slice(2);
+    index += 1;
+
+    if (!inlineValue.trim()) {
+      const nested = parseYamlBlock(lines, index, indent + 2);
+      if (!nested) {
+        throw new Error('List entry missing nested value in YAML fallback parser.');
+      }
+      result.push(nested.value);
+      index = nested.nextIndex;
+      continue;
+    }
+
+    if (isUnsupportedYamlToken(inlineValue)) {
+      throw new Error('Unsupported inline token in YAML list block.');
+    }
+
+    const inlineMapEntry = parseYamlKeyValueLine(inlineValue);
+    if (inlineMapEntry && inlineMapEntry.key) {
+      const item: Record<string, unknown> = {};
+      const inlineMapValue = inlineMapEntry.value.trim();
+      if (!inlineMapValue) {
+        const nestedForInlineValue = parseYamlBlock(lines, index, indent + 4);
+        item[inlineMapEntry.key] = nestedForInlineValue
+          ? nestedForInlineValue.value
+          : {};
+        if (nestedForInlineValue) {
+          index = nestedForInlineValue.nextIndex;
+        }
+      } else {
+        if (isUnsupportedYamlToken(inlineMapValue)) {
+          throw new Error('Unsupported inline map token in YAML list block.');
+        }
+        item[inlineMapEntry.key] = parseYamlScalar(inlineMapEntry.value);
+      }
+
+      const restOfItem = parseYamlMappingBlock(lines, index, indent + 2, item);
+      result.push(restOfItem.value);
+      index = restOfItem.nextIndex;
+      continue;
+    }
+
+    result.push(parseYamlScalar(inlineValue));
+  }
+
+  return { value: result, nextIndex: index };
+}
+
+function parseYamlBlock(lines: string[], startIndex: number, indent: number): ParsedYamlNode | null {
+  const index = skipSkippableLines(lines, startIndex);
+  if (index >= lines.length) {
+    return null;
+  }
+
+  const line = lines[index];
+  const lineIndent = getLineIndent(line);
+  if (lineIndent < indent) {
+    return null;
+  }
+  if (lineIndent !== indent) {
+    throw new Error('Unexpected indentation depth in YAML fallback parser.');
+  }
+
+  const trimmed = line.slice(indent);
+  if (trimmed.startsWith('-')) {
+    return parseYamlSequenceBlock(lines, index, indent);
+  }
+  return parseYamlMappingBlock(lines, index, indent);
 }
 
 function parseYamlFallback(source: string): Record<string, unknown> | null {
   const lines = source.split('\n');
-  const result: Record<string, unknown> = {};
-
-  let index = 0;
-  while (index < lines.length) {
-    const line = lines[index];
-    if (isSkippableYamlLine(line)) {
-      index += 1;
-      continue;
-    }
-    if (/^\s/.test(line) || /^\s*-\s+/.test(line)) {
+  try {
+    const parsed = parseYamlBlock(lines, 0, 0);
+    if (!parsed || !isRecord(parsed.value)) {
       return null;
     }
-
-    const parsed = parseYamlKeyValueLine(line);
-    if (!parsed || !parsed.key) return null;
-
-    const rootValue = parsed.value.trim();
-    if (isUnsupportedYamlToken(rootValue)) {
+    const trailingIndex = skipSkippableLines(lines, parsed.nextIndex);
+    if (trailingIndex < lines.length) {
       return null;
     }
-
-    if (!rootValue) {
-      const nested: Record<string, unknown> = {};
-      index += 1;
-      while (index < lines.length) {
-        const childLine = lines[index];
-        if (isSkippableYamlLine(childLine)) {
-          index += 1;
-          continue;
-        }
-        if (!/^\s/.test(childLine)) {
-          break;
-        }
-
-        // Fallback supports one nested object level with two-space indentation only.
-        if (!/^ {2}\S/.test(childLine) || /^\s*-\s+/.test(childLine)) {
-          return null;
-        }
-
-        const child = parseYamlKeyValueLine(childLine);
-        if (!child || !child.key) return null;
-
-        const childValue = child.value.trim();
-        if (!childValue || isUnsupportedYamlToken(childValue)) {
-          return null;
-        }
-
-        nested[child.key] = parseYamlScalar(child.value);
-        index += 1;
-      }
-
-      result[parsed.key] = nested;
-      continue;
-    }
-
-    result[parsed.key] = parseYamlScalar(parsed.value);
-    index += 1;
+    return parsed.value;
+  } catch {
+    return null;
   }
-
-  return result;
 }
 
 function quoteYamlString(value: string): string {
@@ -204,40 +342,61 @@ function isSupportedYamlScalar(value: unknown): boolean {
   return false;
 }
 
-function assertSupportedYamlFallbackValue(value: unknown, depth: number) {
+function assertSupportedYamlFallbackValue(value: unknown) {
   if (Array.isArray(value)) {
-    throw new Error('YAML fallback serializer does not support arrays.');
-  }
-  if (isRecord(value)) {
-    if (depth >= 1) {
-      throw new Error('YAML fallback serializer supports only one nested object level.');
-    }
-    for (const nestedValue of Object.values(value)) {
-      if (Array.isArray(nestedValue) || isRecord(nestedValue) || !isSupportedYamlScalar(nestedValue)) {
-        throw new Error('YAML fallback serializer encountered unsupported nested YAML value.');
-      }
+    for (const item of value) {
+      assertSupportedYamlFallbackValue(item);
     }
     return;
   }
+
+  if (isRecord(value)) {
+    for (const nestedValue of Object.values(value)) {
+      assertSupportedYamlFallbackValue(nestedValue);
+    }
+    return;
+  }
+
   if (!isSupportedYamlScalar(value)) {
     throw new Error('YAML fallback serializer encountered unsupported YAML value.');
   }
 }
 
-function stringifyYamlFallback(data: Record<string, unknown>): string {
-  let output = '';
-  for (const [key, value] of Object.entries(data)) {
-    assertSupportedYamlFallbackValue(value, 0);
-    if (isRecord(value)) {
-      output += `${formatYamlKey(key)}:\n`;
-      for (const [nestedKey, nestedValue] of Object.entries(value)) {
-        output += `  ${formatYamlKey(nestedKey)}: ${formatYamlScalar(nestedValue)}\n`;
+function stringifyYamlFallbackValue(value: unknown, indent: number): string {
+  const spacing = ' '.repeat(indent);
+
+  if (Array.isArray(value)) {
+    let output = '';
+    for (const item of value) {
+      if (isRecord(item) || Array.isArray(item)) {
+        output += `${spacing}-\n`;
+        output += stringifyYamlFallbackValue(item, indent + 2);
+        continue;
       }
-      continue;
+      output += `${spacing}- ${formatYamlScalar(item)}\n`;
     }
-    output += `${formatYamlKey(key)}: ${formatYamlScalar(value)}\n`;
+    return output;
   }
-  return output;
+
+  if (isRecord(value)) {
+    let output = '';
+    for (const [key, nestedValue] of Object.entries(value)) {
+      if (isRecord(nestedValue) || Array.isArray(nestedValue)) {
+        output += `${spacing}${formatYamlKey(key)}:\n`;
+        output += stringifyYamlFallbackValue(nestedValue, indent + 2);
+        continue;
+      }
+      output += `${spacing}${formatYamlKey(key)}: ${formatYamlScalar(nestedValue)}\n`;
+    }
+    return output;
+  }
+
+  return `${spacing}${formatYamlScalar(value)}\n`;
+}
+
+function stringifyYamlFallback(data: Record<string, unknown>): string {
+  assertSupportedYamlFallbackValue(data);
+  return stringifyYamlFallbackValue(data, 0);
 }
 
 export function parseYamlObject(source: string): Record<string, unknown> | null {
