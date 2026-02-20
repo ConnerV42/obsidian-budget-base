@@ -68,6 +68,36 @@ income: 8000
       expect(result?.categories[1].items).toHaveLength(1);
     });
 
+    it('parses paycheckDate when frontmatter includes a valid ISO date', () => {
+      const content = `---
+type: budget
+month: 2026-03
+paycheckDate: 2026-03-15
+income: 8000
+---
+
+## Items
+- [bill] Rent: 1800`;
+
+      const result = parseBudgetMarkdown(content);
+      expect(result?.paycheckDate).toBe('2026-03-15');
+    });
+
+    it('ignores invalid paycheckDate values', () => {
+      const content = `---
+type: budget
+month: 2026-03
+paycheckDate: 2026-02-31
+income: 8000
+---
+
+## Items
+- [bill] Rent: 1800`;
+
+      const result = parseBudgetMarkdown(content);
+      expect(result?.paycheckDate).toBeUndefined();
+    });
+
     it('parses v2 compensation and derives income from computed take-home', () => {
       const content = `---
 type: budget
@@ -91,6 +121,30 @@ compensation:
         retirementPercentBps: 1600
       });
       expect(result?.income).toBe(4900);
+    });
+
+    it('ignores persisted compensation computed values and recomputes take-home', () => {
+      const content = `---
+type: budget
+month: 2026-02
+income: 9999
+compensation:
+  version: 2
+  gross: 8000
+  taxPercentBps: 2275
+  retirementPercentBps: 1600
+  computed:
+    taxAmount: 1
+    retirementAmount: 1
+    takeHome: 7998
+---
+
+## Items
+- [bill] Rent: 2000`;
+
+      const result = parseBudgetMarkdown(content);
+      expect(result?.income).toBe(4900);
+      expect(result?.compensation?.computed).toBeUndefined();
     });
 
     it('migrates legacy deduction-array compensation and derives take-home', () => {

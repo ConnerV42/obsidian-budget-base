@@ -1,11 +1,27 @@
 import { describe, it, expect, vi } from 'vitest';
 import { BudgetData, calculateTotals } from '../parser';
+import { alignPaycheckDateToMonth, monthFromIsoDate } from './BudgetView';
 
 /**
  * These tests verify the data logic that powers BudgetView.
  * We test the update handlers' logic without rendering the component,
  * since the actual data transformations are what matter for correctness.
  */
+
+describe('BudgetView paycheck date helpers', () => {
+  it('aligns paycheck date to a different month while preserving day when possible', () => {
+    expect(alignPaycheckDateToMonth('2026-03-15', '2026-04')).toBe('2026-04-15');
+  });
+
+  it('clamps paycheck day to end of target month', () => {
+    expect(alignPaycheckDateToMonth('2026-01-31', '2026-02')).toBe('2026-02-28');
+    expect(alignPaycheckDateToMonth('2028-01-31', '2028-02')).toBe('2028-02-29');
+  });
+
+  it('derives month token from paycheck date', () => {
+    expect(monthFromIsoDate('2026-03-15')).toBe('2026-03');
+  });
+});
 
 describe('BudgetView update handlers', () => {
   // Helper to simulate immutable data clone (same as cloneData in BudgetView)

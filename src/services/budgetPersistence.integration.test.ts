@@ -12,7 +12,6 @@ const file = {
   path: FILE_PATH,
   basename: '2026-02-budget'
 } as unknown as TFile;
-const connectedContainer = { isConnected: true } as HTMLElement;
 
 function makeBudget(income: number): BudgetData {
   return {
@@ -103,7 +102,6 @@ function createService(
     getFileByPath: (filePath) => vault.getFileByPath(filePath),
     parseBudget: (content) => parseBudgetMarkdown(content),
     serializeBudget: (data) => serializeBudgetMarkdown(data),
-    renderSnapshot: () => {},
     initialPersistedConflictsByPath: persistedRef.current,
     onPersistedConflictsChange: (next) => {
       persistedRef.current = next;
@@ -124,8 +122,7 @@ async function triggerConflict(
   vault.setContent(FILE_PATH, serializeBudgetMarkdown(makeBudget(remoteIncome)));
   await service.updateBudgetFile(
     file,
-    (prev) => ({ ...prev, income: localIncome }),
-    connectedContainer
+    (prev) => ({ ...prev, income: localIncome })
   );
   await flushAsyncWork();
 }

@@ -16,16 +16,24 @@ export interface BudgetCategory {
   items: BudgetItem[];
 }
 
+export interface CompensationComputedData {
+  taxAmount: number;
+  retirementAmount: number;
+  takeHome: number;
+}
+
 export interface CompensationData {
   version: 2;
   gross: number;
   taxPercentBps: number;
   retirementPercentBps: number;
+  computed?: CompensationComputedData;
 }
 
 export interface BudgetData {
   type: 'budget';
   month: string;          // YYYY-MM format
+  paycheckDate?: string;  // YYYY-MM-DD format
   income: number;
   compensation?: CompensationData;
   categories: BudgetCategory[];
@@ -51,14 +59,25 @@ interface BudgetFrontmatterPassthrough {
 
 const MIN_LAYOUT_SPLIT_RATIO = 0.22;
 const MAX_LAYOUT_SPLIT_RATIO = 0.55;
-const KNOWN_FRONTMATTER_KEYS = new Set(['type', 'month', 'income', 'compensation', 'tagColors', 'chart', 'layout']);
+const KNOWN_FRONTMATTER_KEYS = new Set([
+  'type',
+  'month',
+  'paycheckDate',
+  'income',
+  'compensation',
+  'tagColors',
+  'chart',
+  'layout'
+]);
 const KNOWN_COMPENSATION_KEYS = new Set([
   'version',
   'gross',
   'taxPercentBps',
   'retirementPercentBps',
+  'computed',
   'deductions'
 ]);
+const YEAR_MONTH_DAY_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -76,6 +95,33 @@ function parseOptionalPositiveNumber(value: unknown): number | undefined {
     : Number(String(value ?? '').trim());
   if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
   return parsed;
+}
+
+function parseOptionalIsoDate(value: unknown): string | undefined {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return undefined;
+    return value.toISOString().slice(0, 10);
+  }
+
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  const match = trimmed.match(YEAR_MONTH_DAY_PATTERN);
+  if (!match) return undefined;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+
+  if (
+    date.getFullYear() !== year
+    || date.getMonth() !== month - 1
+    || date.getDate() !== day
+  ) {
+    return undefined;
+  }
+
+  return `${match[1]}-${match[2]}-${match[3]}`;
 }
 
 function hasRecordEntries(value: Record<string, unknown> | undefined): boolean {
@@ -213,6 +259,10 @@ export function parseBudgetMarkdown(content: string): BudgetData | null {
   const month = typeof monthRaw === 'string'
     ? monthRaw.trim()
     : String(monthRaw ?? '').trim();
+  const paycheckDate = parseOptionalIsoDate(rawFrontmatter.paycheckDate);
+  if (!paycheckDate && Object.prototype.hasOwnProperty.call(rawFrontmatter, 'paycheckDate')) {
+    passthroughTopLevel.paycheckDate = rawFrontmatter.paycheckDate;
+  }
   const fallbackIncome = parseAmount(String(rawFrontmatter.income ?? 0));
 
   const tagColors: Record<string, string> = {};
@@ -338,6 +388,7 @@ export function parseBudgetMarkdown(content: string): BudgetData | null {
   return {
     type: 'budget',
     month,
+    paycheckDate,
     income,
     compensation: parsedCompensation.compensation,
     categories,
@@ -353,8 +404,11 @@ export function serializeBudgetMarkdown(data: BudgetData): string {
   const normalizedCompensation = data.compensation
     ? normalizeCompensation(data.compensation)
     : undefined;
-  const computedIncome = normalizedCompensation
-    ? computeCompensation(normalizedCompensation).takeHome
+  const compensationComputation = normalizedCompensation
+    ? computeCompensation(normalizedCompensation)
+    : undefined;
+  const computedIncome = compensationComputation
+    ? compensationComputation.takeHome
     : data.income;
 
   const frontmatter: Record<string, unknown> = {
@@ -363,15 +417,24 @@ export function serializeBudgetMarkdown(data: BudgetData): string {
     month: data.month,
     income: computedIncome
   };
+  const normalizedPaycheckDate = parseOptionalIsoDate(data.paycheckDate);
+  if (normalizedPaycheckDate) {
+    frontmatter.paycheckDate = normalizedPaycheckDate;
+  }
 
-  if (normalizedCompensation) {
+  if (normalizedCompensation && compensationComputation) {
     const compensationPassthrough = passthrough?.compensation;
     frontmatter.compensation = {
       ...(compensationPassthrough?.topLevel || {}),
       version: 2,
       gross: normalizedCompensation.gross,
       taxPercentBps: normalizedCompensation.taxPercentBps,
-      retirementPercentBps: normalizedCompensation.retirementPercentBps
+      retirementPercentBps: normalizedCompensation.retirementPercentBps,
+      computed: {
+        taxAmount: Number(compensationComputation.taxAmount.toFixed(2)),
+        retirementAmount: Number(compensationComputation.retirementAmount.toFixed(2)),
+        takeHome: Number(compensationComputation.takeHome.toFixed(2))
+      }
     };
   }
 

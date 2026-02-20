@@ -8,6 +8,8 @@ import type { CompensationData } from '../parser';
 import { BudgetHeader } from './BudgetHeader';
 
 function BudgetHeaderHarness() {
+  const [month, setMonth] = useState('2026-03');
+  const [paycheckDate, setPaycheckDate] = useState<string | undefined>('2026-03-15');
   const [compensation, setCompensation] = useState<CompensationData>({
     version: 2,
     gross: 13541,
@@ -18,7 +20,8 @@ function BudgetHeaderHarness() {
 
   return (
     <BudgetHeader
-      month="2026-03"
+      month={month}
+      paycheckDate={paycheckDate}
       takeHome={computation.takeHome}
       allocated={7571.34}
       unallocated={computation.takeHome - 7571.34}
@@ -28,7 +31,12 @@ function BudgetHeaderHarness() {
       onCompensationChange={(update) => {
         setCompensation((prev) => update(prev));
       }}
-      onMonthUpdate={() => {}}
+      onPaycheckDateUpdate={(nextPaycheckDate) => {
+        setPaycheckDate(nextPaycheckDate);
+        if (nextPaycheckDate) {
+          setMonth(nextPaycheckDate.slice(0, 7));
+        }
+      }}
     />
   );
 }
@@ -157,5 +165,31 @@ describe('BudgetHeader compensation equation', () => {
     expect(within(taxTerm as HTMLElement).getByRole('button', { name: 'Edit tax percent' })).toBeTruthy();
     expect(within(retirementTerm as HTMLElement).getByRole('button', { name: 'Edit retirement percent' })).toBeTruthy();
     expect(within(takeHomeTerm as HTMLElement).getByText(/\$8,260/)).toBeTruthy();
+  });
+
+  it('renders date-first budget title and updates it from date input', () => {
+    render(<BudgetHeaderHarness />);
+    const editBudgetDate = screen.getByRole('button', { name: 'Edit budget date' });
+    expect(editBudgetDate.textContent).toContain('March 15th, 2026 Budget');
+
+    fireEvent.click(editBudgetDate);
+    const dateInput = screen.getByLabelText('Budget date') as HTMLInputElement;
+    expect(dateInput.value).toBe('2026-03-15');
+
+    fireEvent.input(dateInput, { target: { value: '2026-03-22' } });
+    fireEvent.blur(dateInput);
+
+    expect(screen.getByRole('button', { name: 'Edit budget date' }).textContent).toContain('March 22nd, 2026 Budget');
+  });
+
+  it('clears paycheck date when input is emptied', () => {
+    render(<BudgetHeaderHarness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit budget date' }));
+
+    const dateInput = screen.getByLabelText('Budget date') as HTMLInputElement;
+    fireEvent.input(dateInput, { target: { value: '' } });
+    fireEvent.blur(dateInput);
+
+    expect(screen.getByRole('button', { name: 'Edit budget date' }).textContent).toBe('March 2026 Budget');
   });
 });

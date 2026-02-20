@@ -59,8 +59,8 @@ export default class BudgetFlowPlugin extends Plugin {
       },
       parseBudget: (content) => parseBudgetMarkdown(content),
       serializeBudget: (data) => serializeBudgetMarkdown(data),
-      renderSnapshot: (container, file, data) => {
-        this.renderBudgetView(container, file, data);
+      onSnapshotChange: (filePath) => {
+        void this.refreshDashboardViewsForFilePath(filePath);
       },
       initialPersistedConflictsByPath: this.persistedConflictsByFilePath,
       onPersistedConflictsChange: (conflictsByPath) => {
@@ -72,7 +72,6 @@ export default class BudgetFlowPlugin extends Plugin {
           `Budget sync conflict detected for ${file.basename}. Local edits were preserved in memory and writes were paused to prevent overwrite.`,
           7000
         );
-        void this.refreshDashboardViewsForFile(file);
       }
     });
 
@@ -240,7 +239,7 @@ export default class BudgetFlowPlugin extends Plugin {
         mobileUiScale: normalizeMobileUiScale(this.settings.mobileUiScale),
         mobileEdgeIconY: this.settings.mobileEdgeIconY,
         onUpdate: (update: BudgetDataUpdate) => {
-          void this.budgetPersistence.updateBudgetFile(file, update, container);
+          void this.budgetPersistence.updateBudgetFile(file, update);
         },
         onMobileUiScaleChange: (scale: number) => {
           const normalized = normalizeMobileUiScale(scale);
@@ -257,7 +256,7 @@ export default class BudgetFlowPlugin extends Plugin {
         },
         onResolveConflict: async (strategy: ConflictResolutionStrategy) => {
           await this.budgetPersistence.resolveConflict(file.path, strategy);
-          await this.refreshDashboardViewsForFile(file);
+          await this.refreshDashboardViewsForFilePath(file.path);
         }
       }),
       container
@@ -290,6 +289,10 @@ export default class BudgetFlowPlugin extends Plugin {
   }
 
   private async refreshDashboardViewsForFile(file: TFile) {
+    await this.refreshDashboardViewsForFilePath(file.path);
+  }
+
+  private async refreshDashboardViewsForFilePath(filePath: string) {
     const leaves = this.app.workspace.getLeavesOfType(BUDGET_DASHBOARD_VIEW_TYPE);
 
     for (const leaf of leaves) {
@@ -297,7 +300,7 @@ export default class BudgetFlowPlugin extends Plugin {
       if (!isBudgetDashboardView(view)) {
         continue;
       }
-      if (!view.file || view.file.path !== file.path) {
+      if (!view.file || view.file.path !== filePath) {
         continue;
       }
       await view.refreshCurrentFile();
@@ -531,10 +534,82 @@ function normalizeConflictsByPath(value: unknown): PersistedBudgetConflictsByPat
   return next;
 }
 
+const YEAR_MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/;
+const YEAR_MONTH_DAY_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+
+interface YearMonthToken {
+  year: number;
+  month: number;
+}
+
+interface IsoDateToken extends YearMonthToken {
+  day: number;
+}
+
+function parseYearMonthToken(value: string): YearMonthToken | null {
+  const match = value.trim().match(YEAR_MONTH_PATTERN);
+  if (!match) {
+    return null;
+  }
+
+  return {
+    year: Number(match[1]),
+    month: Number(match[2])
+  };
+}
+
+function parseIsoDateToken(value: string): IsoDateToken | null {
+  const match = value.trim().match(YEAR_MONTH_DAY_PATTERN);
+  if (!match) {
+    return null;
+  }
+
+  const token: IsoDateToken = {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3])
+  };
+  const date = new Date(token.year, token.month - 1, token.day);
+  if (
+    date.getFullYear() !== token.year
+    || date.getMonth() !== token.month - 1
+    || date.getDate() !== token.day
+  ) {
+    return null;
+  }
+
+  return token;
+}
+
+function formatIsoDate(token: IsoDateToken): string {
+  return `${token.year}-${String(token.month).padStart(2, '0')}-${String(token.day).padStart(2, '0')}`;
+}
+
+function shiftPaycheckDateToMonth(paycheckDate: string | undefined, month: string): string | undefined {
+  if (!paycheckDate) {
+    return undefined;
+  }
+
+  const dateToken = parseIsoDateToken(paycheckDate);
+  const monthToken = parseYearMonthToken(month);
+  if (!dateToken || !monthToken) {
+    return undefined;
+  }
+
+  const daysInTargetMonth = new Date(monthToken.year, monthToken.month, 0).getDate();
+  const day = Math.min(dateToken.day, daysInTargetMonth);
+  return formatIsoDate({
+    year: monthToken.year,
+    month: monthToken.month,
+    day
+  });
+}
+
 function cloneBudgetDataForMonth(source: BudgetData, month: string): BudgetData {
   return {
     ...source,
     month,
+    paycheckDate: shiftPaycheckDateToMonth(source.paycheckDate, month),
     compensation: source.compensation
       ? {
         version: source.compensation.version,

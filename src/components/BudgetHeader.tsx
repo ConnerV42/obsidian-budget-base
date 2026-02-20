@@ -5,6 +5,7 @@ import type { CompensationData } from '../parser';
 
 interface BudgetHeaderProps {
   month: string;
+  paycheckDate?: string;
   takeHome: number;
   allocated: number;
   unallocated: number;
@@ -12,10 +13,48 @@ interface BudgetHeaderProps {
   compensationComputation: CompensationComputation;
   isCompensationVirtual: boolean;
   onCompensationChange: (update: (prev: CompensationData) => CompensationData) => void;
-  onMonthUpdate: (month: string) => void;
+  onPaycheckDateUpdate: (paycheckDate: string | undefined) => void;
 }
 
 type EditableCompensationField = 'gross' | 'taxPercentBps' | 'retirementPercentBps';
+const YEAR_MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/;
+const YEAR_MONTH_DAY_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+
+function parseIsoDateToken(value: string): { year: number; month: number; day: number } | null {
+  const match = value.match(YEAR_MONTH_DAY_PATTERN);
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+  if (
+    date.getFullYear() !== year
+    || date.getMonth() !== month - 1
+    || date.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return { year, month, day };
+}
+
+function parseYearMonthToken(value: string): { year: number; month: number } | null {
+  const match = value.match(YEAR_MONTH_PATTERN);
+  if (!match) return null;
+  return { year: Number(match[1]), month: Number(match[2]) };
+}
+
+function toOrdinalDay(day: number): string {
+  const remainderTen = day % 10;
+  const remainderHundred = day % 100;
+  if (remainderTen === 1 && remainderHundred !== 11) return `${day}st`;
+  if (remainderTen === 2 && remainderHundred !== 12) return `${day}nd`;
+  if (remainderTen === 3 && remainderHundred !== 13) return `${day}rd`;
+  return `${day}th`;
+}
 
 function parseNonNegativeDecimal(raw: string): number {
   const cleaned = raw.replace(/[^0-9.]/g, '');
@@ -45,6 +84,7 @@ function formatPercentBps(percentBps: number): string {
 
 export function BudgetHeader({
   month,
+  paycheckDate,
   takeHome,
   allocated,
   unallocated,
@@ -52,21 +92,31 @@ export function BudgetHeader({
   compensationComputation,
   isCompensationVirtual,
   onCompensationChange,
-  onMonthUpdate
+  onPaycheckDateUpdate
 }: BudgetHeaderProps) {
-  const [isEditingMonth, setIsEditingMonth] = useState(false);
-  const [monthValue, setMonthValue] = useState(month);
+  const [isEditingBudgetDate, setIsEditingBudgetDate] = useState(false);
+  const [budgetDateValue, setBudgetDateValue] = useState(paycheckDate || '');
   const [editingField, setEditingField] = useState<EditableCompensationField | null>(null);
   const [editValue, setEditValue] = useState('');
   const [editStartValue, setEditStartValue] = useState<number | null>(null);
-  const monthInputRef = useRef<HTMLInputElement>(null);
+  const budgetDateInputRef = useRef<HTMLInputElement>(null);
   const compensationInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (isEditingMonth && monthInputRef.current) {
-      monthInputRef.current.focus();
+    if (isEditingBudgetDate && budgetDateInputRef.current) {
+      budgetDateInputRef.current.focus();
     }
-  }, [isEditingMonth]);
+  }, [isEditingBudgetDate]);
+
+  useEffect(() => {
+    if (!isEditingBudgetDate) {
+      const fallbackMonth = parseYearMonthToken(month);
+      const fallbackDate = fallbackMonth
+        ? `${fallbackMonth.year}-${String(fallbackMonth.month).padStart(2, '0')}-01`
+        : '';
+      setBudgetDateValue(paycheckDate || fallbackDate);
+    }
+  }, [paycheckDate, month, isEditingBudgetDate]);
 
   useEffect(() => {
     if (!editingField || !compensationInputRef.current) {
@@ -105,11 +155,39 @@ export function BudgetHeader({
     return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   };
 
-  const handleMonthSave = () => {
-    setIsEditingMonth(false);
-    if (monthValue.trim()) {
-      onMonthUpdate(monthValue.trim());
+  const formatBudgetDate = (value: string | undefined, monthValue: string) => {
+    if (!value) {
+      return formatMonth(monthValue);
     }
+    const token = parseIsoDateToken(value);
+    if (!token) {
+      return formatMonth(monthValue);
+    }
+    const monthLabel = new Date(token.year, token.month - 1, token.day).toLocaleDateString('en-US', {
+      month: 'long'
+    });
+    return `${monthLabel} ${toOrdinalDay(token.day)}, ${token.year}`;
+  };
+
+  const handleBudgetDateSave = () => {
+    setIsEditingBudgetDate(false);
+    const trimmed = budgetDateValue.trim();
+
+    if (!trimmed) {
+      onPaycheckDateUpdate(undefined);
+      return;
+    }
+
+    if (parseIsoDateToken(trimmed)) {
+      onPaycheckDateUpdate(trimmed);
+      return;
+    }
+
+    const fallbackMonth = parseYearMonthToken(month);
+    const fallbackDate = fallbackMonth
+      ? `${fallbackMonth.year}-${String(fallbackMonth.month).padStart(2, '0')}-01`
+      : '';
+    setBudgetDateValue(paycheckDate || fallbackDate);
   };
 
   const clearCompensationEditState = () => {
@@ -185,13 +263,31 @@ export function BudgetHeader({
     beginCompensationEdit(field);
   };
 
-  const handleMonthKeyDown = (e: KeyboardEvent) => {
+  const handleBudgetDateInputKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter') {
-      handleMonthSave();
+      handleBudgetDateSave();
     } else if (e.key === 'Escape') {
-      setMonthValue(month);
-      setIsEditingMonth(false);
+      const fallbackMonth = parseYearMonthToken(month);
+      const fallbackDate = fallbackMonth
+        ? `${fallbackMonth.year}-${String(fallbackMonth.month).padStart(2, '0')}-01`
+        : '';
+      setBudgetDateValue(paycheckDate || fallbackDate);
+      setIsEditingBudgetDate(false);
     }
+  };
+
+  const handleBudgetDateValueKeyDown = (event: h.JSX.TargetedKeyboardEvent<HTMLHeadingElement>) => {
+    if (event.key !== 'Enter' && event.key !== ' ') {
+      return;
+    }
+
+    event.preventDefault();
+    const fallbackMonth = parseYearMonthToken(month);
+    const fallbackDate = fallbackMonth
+      ? `${fallbackMonth.year}-${String(fallbackMonth.month).padStart(2, '0')}-01`
+      : '';
+    setBudgetDateValue(paycheckDate || fallbackDate);
+    setIsEditingBudgetDate(true);
   };
 
   const percentAllocated = takeHome > 0 ? (allocated / takeHome) * 100 : 0;
@@ -200,26 +296,35 @@ export function BudgetHeader({
     <div className="budget-header">
       <div className="budget-header-top">
         <div className="budget-header-title">
-          {isEditingMonth ? (
+          {isEditingBudgetDate ? (
             <input
-              ref={monthInputRef}
-              type="month"
+              ref={budgetDateInputRef}
+              type="date"
               className="budget-month-input budget-inline-edit-input"
-              value={monthValue}
-              onInput={(e) => setMonthValue((e.target as HTMLInputElement).value)}
-              onBlur={handleMonthSave}
-              onKeyDown={handleMonthKeyDown}
+              value={budgetDateValue}
+              onInput={(event) => setBudgetDateValue((event.target as HTMLInputElement).value)}
+              onBlur={handleBudgetDateSave}
+              onKeyDown={handleBudgetDateInputKeyDown}
+              aria-label="Budget date"
             />
           ) : (
             <h1
-              className="clickable"
+              className="clickable budget-header-date-title"
+              role="button"
+              tabIndex={0}
               onClick={() => {
-                setMonthValue(month);
-                setIsEditingMonth(true);
+                const fallbackMonth = parseYearMonthToken(month);
+                const fallbackDate = fallbackMonth
+                  ? `${fallbackMonth.year}-${String(fallbackMonth.month).padStart(2, '0')}-01`
+                  : '';
+                setBudgetDateValue(paycheckDate || fallbackDate);
+                setIsEditingBudgetDate(true);
               }}
-              title="Click to change month"
+              onKeyDown={handleBudgetDateValueKeyDown}
+              title="Click to change budget date"
+              aria-label="Edit budget date"
             >
-              {formatMonth(month)} Budget
+              {formatBudgetDate(paycheckDate, month)} Budget
             </h1>
           )}
         </div>

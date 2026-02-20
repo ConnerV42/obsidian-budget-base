@@ -153,6 +153,7 @@ describe('serializeBudgetMarkdown', () => {
     const data: BudgetData = {
       type: 'budget',
       month: '2026-02',
+      paycheckDate: '2026-02-15',
       income: 0,
       compensation: {
         version: 2,
@@ -174,7 +175,13 @@ describe('serializeBudgetMarkdown', () => {
     expect(serialized).toContain('compensation:');
     expect(serialized).toContain('taxPercentBps: 2275');
     expect(serialized).toContain('retirementPercentBps: 1600');
+    expect(serialized).toContain('computed:');
+    expect(serialized).toContain('taxAmount: 1865.5');
+    expect(serialized).toContain('retirementAmount: 1312');
+    expect(serialized).toContain('takeHome: 5022.5');
+    expect(serialized).toMatch(/paycheckDate:\s*"?2026-02-15"?/);
     expect(parsed?.income).toBe(5022.5);
+    expect(parsed?.paycheckDate).toBe('2026-02-15');
     expect(parsed?.compensation).toEqual({
       version: 2,
       gross: 8200,
@@ -292,5 +299,39 @@ compensation:
     expect(serialized).toContain('provider: "manual"');
     expect(serialized).toContain('taxPercentBps: 2275');
     expect(serialized).toContain('retirementPercentBps: 1200');
+    expect(serialized).toContain('computed:');
+    expect(serialized).toContain('taxAmount: 1820');
+    expect(serialized).toContain('retirementAmount: 960');
+    expect(serialized).toContain('takeHome: 5220');
+  });
+
+  it('overwrites stale persisted compensation computed values on serialize', () => {
+    const source = `---
+type: budget
+month: 2026-02
+income: 5000
+compensation:
+  version: 2
+  gross: 8000
+  taxPercentBps: 2275
+  retirementPercentBps: 1600
+  computed:
+    taxAmount: 1
+    retirementAmount: 2
+    takeHome: 3
+---
+
+## Items
+- [bill] Rent: 1800
+`;
+
+    const parsed = parseBudgetMarkdown(source);
+    expect(parsed).not.toBeNull();
+
+    const serialized = serializeBudgetMarkdown(parsed!);
+    expect(serialized).toContain('computed:');
+    expect(serialized).toContain('taxAmount: 1820');
+    expect(serialized).toContain('retirementAmount: 1280');
+    expect(serialized).toContain('takeHome: 4900');
   });
 });

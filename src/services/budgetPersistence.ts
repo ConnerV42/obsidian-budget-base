@@ -35,7 +35,7 @@ interface BudgetPersistenceOptions {
   getFileByPath: (filePath: string) => Promise<TFile | null> | TFile | null;
   parseBudget: (content: string) => BudgetData | null;
   serializeBudget: (data: BudgetData) => string;
-  renderSnapshot: (container: HTMLElement, file: TFile, data: BudgetData) => void;
+  onSnapshotChange?: (filePath: string) => void;
   initialPersistedConflictsByPath?: PersistedBudgetConflictsByPath;
   onPersistedConflictsChange?: (conflictsByPath: PersistedBudgetConflictsByPath) => void;
   onConflict?: (file: TFile, conflict: BudgetWriteConflict) => void;
@@ -89,7 +89,7 @@ export class BudgetPersistenceService {
     };
   }
 
-  async updateBudgetFile(file: TFile, update: BudgetDataUpdate, container: HTMLElement) {
+  async updateBudgetFile(file: TFile, update: BudgetDataUpdate) {
     let state = this.fileSyncStates.get(file.path);
     if (!state) {
       const content = await this.options.readFile(file);
@@ -101,15 +101,13 @@ export class BudgetPersistenceService {
     }
 
     const latestData = state.queue.apply(update);
-    if (container.isConnected) {
-      this.options.renderSnapshot(container, file, latestData);
-    }
 
     if (state.conflict) {
       this.syncConflictPendingLocalSnapshot(file.path, state, latestData);
     }
 
-    void this.flushBudgetFileWrites(file, container, state);
+    this.emitSnapshotChange(file.path);
+    void this.flushBudgetFileWrites(file, state);
   }
 
   async resolveConflict(filePath: string, strategy: ConflictResolutionStrategy): Promise<void> {
@@ -204,7 +202,7 @@ export class BudgetPersistenceService {
     }
   }
 
-  private async flushBudgetFileWrites(file: TFile, container: HTMLElement, state: FileSyncState) {
+  private async flushBudgetFileWrites(file: TFile, state: FileSyncState) {
     if (state.flushInProgress || state.conflict) return;
 
     state.flushInProgress = true;
@@ -222,10 +220,8 @@ export class BudgetPersistenceService {
         state.baseContent = nextSerialized;
         state.conflict = null;
       },
-      (snapshot) => {
-        if (container.isConnected) {
-          this.options.renderSnapshot(container, file, snapshot);
-        }
+      () => {
+        this.emitSnapshotChange(file.path);
       }
     );
 
@@ -235,7 +231,7 @@ export class BudgetPersistenceService {
 
     state.flushInProgress = false;
     if (state.queue.hasPendingWork && !state.conflict) {
-      void this.flushBudgetFileWrites(file, container, state);
+      void this.flushBudgetFileWrites(file, state);
     }
   }
 
@@ -289,6 +285,7 @@ export class BudgetPersistenceService {
       pendingLocalSerialized
     };
     this.persistConflict(filePath, state.conflict);
+    this.emitSnapshotChange(filePath);
   }
 
   private syncConflictWithSource(filePath: string, state: FileSyncState, sourceContent: string) {
@@ -309,6 +306,7 @@ export class BudgetPersistenceService {
       remoteContentParsable
     };
     this.persistConflict(filePath, state.conflict);
+    this.emitSnapshotChange(filePath);
   }
 
   private safeSerializeCurrentSnapshot(state: FileSyncState): string | null {
@@ -344,6 +342,7 @@ export class BudgetPersistenceService {
     state.baseContent = currentContent;
     state.conflict = null;
     this.clearPersistedConflict(filePath);
+    this.emitSnapshotChange(filePath);
   }
 
   private async resolveByRetryingLocal(
@@ -377,6 +376,7 @@ export class BudgetPersistenceService {
     state.baseContent = localSerialized;
     state.conflict = null;
     this.clearPersistedConflict(filePath);
+    this.emitSnapshotChange(filePath);
   }
 
   private latchConflict(
@@ -404,6 +404,7 @@ export class BudgetPersistenceService {
     if (this.options.onConflict) {
       this.options.onConflict(file, cloneConflict(conflict));
     }
+    this.emitSnapshotChange(filePath);
   }
 
   private persistConflict(filePath: string, conflict: BudgetWriteConflict) {
@@ -424,6 +425,13 @@ export class BudgetPersistenceService {
       return;
     }
     this.options.onPersistedConflictsChange(clonePersistedConflicts(this.persistedConflictsByPath));
+  }
+
+  private emitSnapshotChange(filePath: string) {
+    if (!this.options.onSnapshotChange) {
+      return;
+    }
+    this.options.onSnapshotChange(filePath);
   }
 }
 

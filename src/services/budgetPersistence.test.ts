@@ -61,7 +61,6 @@ describe('budget persistence conflict checks', () => {
 
 describe('budget persistence state transitions', () => {
   const file = { path: '2026-02-budget.md', basename: '2026-02-budget' } as unknown as TFile;
-  const connectedContainer = { isConnected: true } as HTMLElement;
 
   it('preserves local pending edits when source content changes during in-flight write', async () => {
     const initial = makeBudget(5000);
@@ -82,12 +81,11 @@ describe('budget persistence state transitions', () => {
       writeFile,
       getFileByPath: () => file,
       parseBudget,
-      serializeBudget,
-      renderSnapshot: () => {}
+      serializeBudget
     });
 
     service.getLatestData(file.path, initial, fileContent);
-    await service.updateBudgetFile(file, (prev) => ({ ...prev, income: localPendingIncome }), connectedContainer);
+    await service.updateBudgetFile(file, (prev) => ({ ...prev, income: localPendingIncome }));
 
     await vi.waitFor(() => expect(writeFile).toHaveBeenCalledTimes(1));
     fileContent = serializeBudget(remoteNewer);
@@ -114,7 +112,6 @@ describe('budget persistence state transitions', () => {
       getFileByPath: () => file,
       parseBudget,
       serializeBudget,
-      renderSnapshot: () => {},
       onConflict: (_file, conflict) => {
         conflicts.push(conflict.remoteContentParsable);
       }
@@ -123,13 +120,13 @@ describe('budget persistence state transitions', () => {
     service.getLatestData(file.path, initial, fileContent);
     fileContent = '---\ninvalid: [\n---';
 
-    await service.updateBudgetFile(file, (prev) => ({ ...prev, income: 5300 }), connectedContainer);
+    await service.updateBudgetFile(file, (prev) => ({ ...prev, income: 5300 }));
     await flushAsyncWork();
 
     expect(writeFile).toHaveBeenCalledTimes(0);
     expect(conflicts).toEqual([false]);
 
-    await service.updateBudgetFile(file, (prev) => ({ ...prev, income: 5400 }), connectedContainer);
+    await service.updateBudgetFile(file, (prev) => ({ ...prev, income: 5400 }));
     await flushAsyncWork();
 
     expect(writeFile).toHaveBeenCalledTimes(0);
@@ -154,7 +151,6 @@ describe('budget persistence state transitions', () => {
       getFileByPath: () => file,
       parseBudget,
       serializeBudget,
-      renderSnapshot: () => {},
       onConflict: (_file, conflict) => {
         conflictReasons.push(conflict.reason);
       }
@@ -163,10 +159,10 @@ describe('budget persistence state transitions', () => {
     service.getLatestData(file.path, initial, fileContent);
     fileContent = serializeBudget(remoteNewer);
 
-    await service.updateBudgetFile(file, (prev) => ({ ...prev, income: 5200 }), connectedContainer);
+    await service.updateBudgetFile(file, (prev) => ({ ...prev, income: 5200 }));
     await flushAsyncWork();
 
-    await service.updateBudgetFile(file, (prev) => ({ ...prev, income: 5300 }), connectedContainer);
+    await service.updateBudgetFile(file, (prev) => ({ ...prev, income: 5300 }));
     await flushAsyncWork();
 
     expect(writeFile).toHaveBeenCalledTimes(0);
@@ -175,5 +171,29 @@ describe('budget persistence state transitions', () => {
 
     const latest = service.getLatestData(file.path, remoteNewer, fileContent);
     expect(latest.income).toBe(5300);
+  });
+
+  it('emits snapshot change notifications for apply and flush', async () => {
+    const initial = makeBudget(5000);
+    let fileContent = serializeBudget(initial);
+    const onSnapshotChange = vi.fn();
+
+    const service = new BudgetPersistenceService({
+      readFile: async () => fileContent,
+      writeFile: async (_file: TFile, nextContent: string) => {
+        fileContent = nextContent;
+      },
+      getFileByPath: () => file,
+      parseBudget,
+      serializeBudget,
+      onSnapshotChange
+    });
+
+    service.getLatestData(file.path, initial, fileContent);
+    await service.updateBudgetFile(file, (prev) => ({ ...prev, income: 5250 }));
+    expect(onSnapshotChange).toHaveBeenCalledWith(file.path);
+
+    await flushAsyncWork();
+    expect(onSnapshotChange.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 });

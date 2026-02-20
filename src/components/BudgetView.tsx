@@ -47,6 +47,74 @@ const DEFAULT_MOBILE_EDGE_ICON_Y_RATIO = 0.56;
 const MOBILE_EDGE_ICON_TOP_GUTTER = 86;
 const MOBILE_EDGE_ICON_BOTTOM_GUTTER = 116;
 const MOBILE_EDGE_ICON_TAP_SLOP = 8;
+const YEAR_MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/;
+const YEAR_MONTH_DAY_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+
+interface YearMonthToken {
+  year: number;
+  month: number;
+}
+
+interface IsoDateToken extends YearMonthToken {
+  day: number;
+}
+
+const parseYearMonthToken = (value: string): YearMonthToken | null => {
+  const match = value.trim().match(YEAR_MONTH_PATTERN);
+  if (!match) return null;
+  return {
+    year: Number(match[1]),
+    month: Number(match[2])
+  };
+};
+
+const parseIsoDateToken = (value: string): IsoDateToken | null => {
+  const match = value.trim().match(YEAR_MONTH_DAY_PATTERN);
+  if (!match) return null;
+
+  const token: IsoDateToken = {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3])
+  };
+  const date = new Date(token.year, token.month - 1, token.day);
+  if (
+    date.getFullYear() !== token.year
+    || date.getMonth() !== token.month - 1
+    || date.getDate() !== token.day
+  ) {
+    return null;
+  }
+
+  return token;
+};
+
+const formatIsoDate = (token: IsoDateToken): string =>
+  `${token.year}-${String(token.month).padStart(2, '0')}-${String(token.day).padStart(2, '0')}`;
+
+const getDaysInMonth = (year: number, month: number): number => {
+  return new Date(year, month, 0).getDate();
+};
+
+export const alignPaycheckDateToMonth = (paycheckDate: string | undefined, month: string): string | undefined => {
+  if (!paycheckDate) return undefined;
+  const paycheckToken = parseIsoDateToken(paycheckDate);
+  const monthToken = parseYearMonthToken(month);
+  if (!paycheckToken || !monthToken) return undefined;
+
+  const day = Math.min(paycheckToken.day, getDaysInMonth(monthToken.year, monthToken.month));
+  return formatIsoDate({
+    year: monthToken.year,
+    month: monthToken.month,
+    day
+  });
+};
+
+export const monthFromIsoDate = (paycheckDate: string): string | null => {
+  const token = parseIsoDateToken(paycheckDate);
+  if (!token) return null;
+  return `${token.year}-${String(token.month).padStart(2, '0')}`;
+};
 
 const clampSplitRatio = (ratio?: number): number => {
   const parsed = Number(ratio);
@@ -515,8 +583,33 @@ export function BudgetView({
     });
   };
 
-  const handleMonthUpdate = (newMonth: string) => {
-    onUpdate(prev => ({ ...prev, month: newMonth }));
+  const handlePaycheckDateUpdate = (nextPaycheckDate: string | undefined) => {
+    onUpdate((prev) => {
+      if (!nextPaycheckDate) {
+        if (!prev.paycheckDate) {
+          return prev;
+        }
+        return {
+          ...prev,
+          paycheckDate: undefined
+        };
+      }
+
+      const nextMonth = monthFromIsoDate(nextPaycheckDate);
+      if (!nextMonth) {
+        return prev;
+      }
+
+      if (prev.paycheckDate === nextPaycheckDate && prev.month === nextMonth) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        month: nextMonth,
+        paycheckDate: nextPaycheckDate
+      };
+    });
   };
 
   const handleMobilePanelToggle = () => {
@@ -797,6 +890,7 @@ export function BudgetView({
       )}
       <BudgetHeader
         month={data.month}
+        paycheckDate={data.paycheckDate}
         takeHome={totals.income}
         allocated={totals.totalAllocated}
         unallocated={totals.unallocated}
@@ -804,7 +898,7 @@ export function BudgetView({
         compensationComputation={compensationComputation}
         isCompensationVirtual={!hasPersistedCompensation}
         onCompensationChange={handleCompensationChange}
-        onMonthUpdate={handleMonthUpdate}
+        onPaycheckDateUpdate={handlePaycheckDateUpdate}
       />
 
       {isMobileLayout && (
