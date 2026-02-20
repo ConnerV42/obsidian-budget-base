@@ -1377,7 +1377,8 @@ input[type="date"].budget-inline-edit-input:focus {
 /* Final mobile override pass (placed last to win cascade against base rules) */
 @media (max-width: 768px), (pointer: coarse) {
   .budgetbase-dashboard-root {
-    padding: 8px;
+    --budget-mobile-outer-gutter: 2px;
+    padding: 8px var(--budget-mobile-outer-gutter);
   }
 
   .budget-flow.mobile-layout {
@@ -1385,9 +1386,10 @@ input[type="date"].budget-inline-edit-input:focus {
     --budget-mobile-bottom-offset: calc(
       var(--budget-mobile-bottom-safe) + var(--budget-mobile-bottom-buffer)
     );
-    --budget-row-edge-gutter: 10px;
-    --budget-row-control-size: 18px;
-    --budget-row-column-gap: 8px;
+    --budget-row-edge-gutter: 3px;
+    --budget-row-control-visual-size: 14px;
+    --budget-row-control-hit-width: 18px;
+    --budget-row-column-gap: 6px;
     --budget-row-control-gap: 2px;
     --budget-row-min-hit-height: 18px;
     --budget-toggle-text-min: 0.68rem;
@@ -1574,31 +1576,51 @@ input[type="date"].budget-inline-edit-input:focus {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: var(--budget-row-control-size);
-    height: var(--budget-row-control-size);
-    min-width: var(--budget-row-control-size);
-    min-height: var(--budget-row-control-size);
+    position: relative;
+    width: var(--budget-row-control-visual-size);
+    height: var(--budget-row-control-visual-size);
+    min-width: var(--budget-row-control-visual-size);
+    min-height: var(--budget-row-control-visual-size);
     padding: 0;
     font-size: var(--budget-drag-handle-font-size);
+  }
+
+  .budget-flow.mobile-layout .budget-item-drag-handle::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc((var(--budget-row-control-hit-width) - var(--budget-row-control-visual-size)) / -2);
+    right: calc((var(--budget-row-control-hit-width) - var(--budget-row-control-visual-size)) / -2);
   }
 
   .budget-flow.mobile-layout .budget-item-delete {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: var(--budget-row-control-size);
-    height: var(--budget-row-control-size);
-    min-width: var(--budget-row-control-size);
-    min-height: var(--budget-row-control-size);
-    margin-left: 4px;
+    position: relative;
+    width: var(--budget-row-control-visual-size);
+    height: var(--budget-row-control-visual-size);
+    min-width: var(--budget-row-control-visual-size);
+    min-height: var(--budget-row-control-visual-size);
+    margin-left: 3px;
     padding: 0;
     font-size: var(--budget-delete-font-size);
     border-radius: 7px;
   }
 
+  .budget-flow.mobile-layout .budget-item-delete::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc((var(--budget-row-control-hit-width) - var(--budget-row-control-visual-size)) / -2);
+    right: calc((var(--budget-row-control-hit-width) - var(--budget-row-control-visual-size)) / -2);
+  }
+
   .budget-flow.mobile-layout .budget-item-delete.confirming {
     min-width: var(--budget-delete-confirm-width);
-    min-height: var(--budget-row-control-size);
+    min-height: var(--budget-row-control-visual-size);
     padding: 0 8px;
     font-size: var(--budget-delete-confirm-font-size);
     line-height: 1;
