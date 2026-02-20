@@ -95,6 +95,32 @@ describe('BudgetHeader compensation equation', () => {
     expect(screen.getByLabelText('Tax percent')).toBeTruthy();
   });
 
+  it('uses full keyboard editing attrs and only commits compensation on blur', () => {
+    render(<BudgetHeaderHarness />);
+    const equation = screen.getByLabelText('Compensation equation');
+
+    fireEvent.click(within(equation).getByRole('button', { name: 'Edit gross pay' }));
+    const grossInput = screen.getByLabelText('Gross pay') as HTMLInputElement;
+    expect(grossInput.getAttribute('inputmode')).toBeNull();
+    expect(grossInput.getAttribute('enterkeyhint')).toBe('done');
+
+    fireEvent.input(grossInput, { target: { value: '15000.00' } });
+    expect(grossInput.value).toBe('15000.00');
+    expect(equation.textContent).toContain('$3,114');
+    expect(equation.textContent).toContain('$8,260');
+
+    fireEvent.blur(grossInput);
+    expect(screen.queryByLabelText('Gross pay')).toBeNull();
+    expect(equation.textContent).toContain('$15,000');
+    expect(equation.textContent).toContain('$3,450');
+    expect(equation.textContent).toContain('$9,150');
+
+    fireEvent.click(within(equation).getByRole('button', { name: 'Edit tax percent' }));
+    const taxInput = screen.getByLabelText('Tax percent') as HTMLInputElement;
+    expect(taxInput.getAttribute('inputmode')).toBeNull();
+    expect(taxInput.getAttribute('enterkeyhint')).toBe('done');
+  });
+
   it('reverts field changes on Escape and keeps prior read-mode value', () => {
     render(<BudgetHeaderHarness />);
     const equation = screen.getByLabelText('Compensation equation');

@@ -520,15 +520,26 @@ body.budget-resizing-splitter * {
 .budget-header-equation {
   --budget-comp-value-color: var(--text-normal);
   --budget-comp-value-hover: color-mix(in srgb, var(--interactive-accent, #4f9cf9) 28%, transparent);
+  --budget-eq-label-font-size: 0.75rem;
+  --budget-eq-label-line-height: 1.24;
+  --budget-eq-label-headroom: 0.22rem;
+  --budget-eq-label-row-height: calc(
+    var(--budget-eq-label-font-size) * var(--budget-eq-label-line-height)
+    + var(--budget-eq-label-headroom)
+  );
+  --budget-eq-value-font-size: 1.06rem;
+  --budget-eq-value-line-height: 1.1;
+  --budget-eq-value-headroom: 0.18rem;
+  --budget-eq-value-row-height: calc(
+    var(--budget-eq-value-font-size) * var(--budget-eq-value-line-height)
+    + var(--budget-eq-value-headroom)
+  );
+  --budget-eq-value-font-weight: 600;
+  --budget-eq-row-gap: 3px;
   margin-bottom: 14px;
 }
 
-.budget-equation-line {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: flex-end;
-  gap: 8px;
-  white-space: nowrap;
+.budget-equation-scroll {
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
@@ -536,21 +547,66 @@ body.budget-resizing-splitter * {
   padding-bottom: 2px;
 }
 
-.budget-equation-line::-webkit-scrollbar {
+.budget-equation-scroll::-webkit-scrollbar {
   height: 6px;
 }
 
-.budget-equation-term {
+.budget-equation-line {
   display: inline-flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-end;
-  gap: 3px;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 100%;
+  width: max-content;
+  min-height: calc(
+    var(--budget-eq-label-row-height)
+    + var(--budget-eq-row-gap)
+    + var(--budget-eq-value-row-height)
+  );
+  white-space: nowrap;
+}
+
+.budget-equation-term,
+.budget-equation-glyph {
+  display: inline-grid;
+  grid-template-rows: var(--budget-eq-label-row-height) var(--budget-eq-value-row-height);
+  align-items: stretch;
+  row-gap: var(--budget-eq-row-gap);
   flex: 0 0 auto;
 }
 
+.budget-equation-term {
+  justify-items: start;
+}
+
+.budget-equation-glyph {
+  justify-items: center;
+}
+
+.budget-equation-glyph-label {
+  display: block;
+  min-height: var(--budget-eq-label-row-height);
+  width: 1px;
+  visibility: hidden;
+}
+
+.budget-equation-glyph-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--budget-eq-value-row-height);
+  font-size: var(--budget-eq-value-font-size);
+  font-weight: var(--budget-eq-value-font-weight);
+  line-height: var(--budget-eq-value-line-height);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .budget-equation-inline-label {
-  font-size: 0.75rem;
+  display: block;
+  min-height: var(--budget-eq-label-row-height);
+  font-size: var(--budget-eq-label-font-size);
+  line-height: var(--budget-eq-label-line-height);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
@@ -560,36 +616,65 @@ body.budget-resizing-splitter * {
 .budget-equation-inline-value {
   display: inline-flex;
   align-items: baseline;
+  min-height: var(--budget-eq-value-row-height);
   gap: 4px;
   color: var(--text-normal);
-  font-size: 1.06rem;
-  font-weight: 600;
-  line-height: 1.1;
+  font-size: var(--budget-eq-value-font-size);
+  font-weight: var(--budget-eq-value-font-weight);
+  line-height: var(--budget-eq-value-line-height);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
 .budget-equation-inline-group {
   display: inline-flex;
   align-items: baseline;
+  min-height: var(--budget-eq-value-row-height);
   gap: 4px;
+  font-size: var(--budget-eq-value-font-size);
+  font-weight: var(--budget-eq-value-font-weight);
+  line-height: var(--budget-eq-value-line-height);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
 .budget-comp-input-inline {
+  display: inline-block;
+  vertical-align: baseline;
   color: var(--text-normal);
   font-family: var(--font-interface);
-  font-size: 1.06rem;
-  font-weight: 600;
-  line-height: 1.1;
+  font-size: var(--budget-eq-value-font-size);
+  font-weight: var(--budget-eq-value-font-weight);
+  line-height: var(--budget-eq-value-line-height);
   min-width: 4ch;
+  min-height: var(--budget-eq-value-row-height);
+  height: var(--budget-eq-value-row-height);
   max-width: 14ch;
+  margin: 0;
   padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-sizing: border-box;
   box-shadow: none;
   text-align: left;
+  font-variant-numeric: tabular-nums;
+  caret-color: var(--text-normal);
+  -webkit-text-fill-color: var(--text-normal);
 }
 
 .budget-comp-input-inline:focus {
   outline: none;
+}
+
+input[type="text"].budget-comp-input-inline.budget-inline-edit-input {
+  border-bottom: 0;
+  box-shadow: none;
+}
+
+input[type="text"].budget-comp-input-inline.budget-inline-edit-input:focus {
+  border-bottom-color: transparent;
+  box-shadow: none;
 }
 
 .budget-comp-input-inline-percent {
@@ -607,6 +692,7 @@ body.budget-resizing-splitter * {
   font-size: inherit;
   font-weight: inherit;
   line-height: inherit;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
   padding: 0;
   margin: 0;
@@ -633,28 +719,21 @@ body.budget-resizing-splitter * {
 
 .budget-equation-paren,
 .budget-equation-equals {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--budget-eq-value-row-height);
   color: var(--text-muted);
-  font-size: 0.95em;
-  line-height: 1;
+  font-size: 1em;
+  line-height: var(--budget-eq-value-line-height);
 }
 
-.budget-equation-op {
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: var(--text-muted);
-  line-height: 1;
-  flex: 0 0 auto;
-  align-self: flex-end;
-  padding-bottom: 1px;
+.budget-equation-op .budget-equation-glyph-value {
+  font-size: 1em;
 }
 
-.budget-equation-separator {
-  font-size: 0.9rem;
-  color: var(--text-muted);
+.budget-equation-separator .budget-equation-glyph-value {
+  font-size: 1em;
   opacity: 0.9;
-  flex: 0 0 auto;
-  align-self: flex-end;
-  padding-bottom: 1px;
 }
 
 .budget-equation-inline-percent {
@@ -1447,35 +1526,51 @@ input[type="date"].budget-inline-edit-input:focus {
   }
 
   .budget-flow.mobile-layout .budget-header-equation {
+    --budget-eq-label-font-size: max(calc(0.56rem * var(--budget-mobile-scale)), 0.5rem);
+    --budget-eq-value-font-size: max(calc(0.86rem * var(--budget-mobile-scale)), 0.74rem);
+    --budget-eq-label-line-height: 1.24;
+    --budget-eq-value-line-height: 1.1;
+    --budget-eq-label-headroom: max(calc(5px * var(--budget-mobile-scale)), 4px);
+    --budget-eq-value-headroom: max(calc(3px * var(--budget-mobile-scale)), 2px);
+    --budget-eq-label-row-height: calc(
+      var(--budget-eq-label-font-size) * var(--budget-eq-label-line-height)
+      + var(--budget-eq-label-headroom)
+    );
+    --budget-eq-value-row-height: calc(
+      var(--budget-eq-value-font-size) * var(--budget-eq-value-line-height)
+      + var(--budget-eq-value-headroom)
+    );
+    --budget-eq-row-gap: max(calc(3px * var(--budget-mobile-scale)), 2px);
     margin-bottom: calc(6px * var(--budget-mobile-scale));
   }
 
-  .budget-flow.mobile-layout .budget-equation-line {
-    align-items: flex-end;
-    gap: calc(6px * var(--budget-mobile-scale));
+  .budget-flow.mobile-layout .budget-equation-scroll {
     padding-bottom: calc(2px * var(--budget-mobile-scale));
   }
 
+  .budget-flow.mobile-layout .budget-equation-line {
+    gap: calc(6px * var(--budget-mobile-scale));
+  }
+
   .budget-flow.mobile-layout .budget-equation-inline-label {
-    font-size: max(calc(0.56rem * var(--budget-mobile-scale)), 0.5rem);
+    font-size: var(--budget-eq-label-font-size);
   }
 
   .budget-flow.mobile-layout .budget-equation-inline-value {
-    font-size: max(calc(0.86rem * var(--budget-mobile-scale)), 0.74rem);
+    font-size: var(--budget-eq-value-font-size);
   }
 
   .budget-flow.mobile-layout .budget-equation-inline-percent {
     font-size: max(calc(0.68rem * var(--budget-mobile-scale)), 0.6rem);
   }
 
-  .budget-flow.mobile-layout .budget-equation-op,
-  .budget-flow.mobile-layout .budget-equation-separator {
+  .budget-flow.mobile-layout .budget-equation-op .budget-equation-glyph-value,
+  .budget-flow.mobile-layout .budget-equation-separator .budget-equation-glyph-value {
     font-size: max(calc(0.72rem * var(--budget-mobile-scale)), 0.62rem);
-    padding-bottom: calc(1px * var(--budget-mobile-scale));
   }
 
   .budget-flow.mobile-layout .budget-comp-input-inline {
-    font-size: max(calc(0.86rem * var(--budget-mobile-scale)), 0.74rem);
+    font-size: var(--budget-eq-value-font-size);
   }
 
   .budget-flow.mobile-layout .budget-comp-input-inline-percent {

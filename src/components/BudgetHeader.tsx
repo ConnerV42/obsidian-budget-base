@@ -98,7 +98,6 @@ export function BudgetHeader({
   const [budgetDateValue, setBudgetDateValue] = useState(paycheckDate || '');
   const [editingField, setEditingField] = useState<EditableCompensationField | null>(null);
   const [editValue, setEditValue] = useState('');
-  const [editStartValue, setEditStartValue] = useState<number | null>(null);
   const budgetDateInputRef = useRef<HTMLInputElement>(null);
   const compensationInputRef = useRef<HTMLInputElement>(null);
 
@@ -193,46 +192,49 @@ export function BudgetHeader({
   const clearCompensationEditState = () => {
     setEditingField(null);
     setEditValue('');
-    setEditStartValue(null);
   };
 
   const beginCompensationEdit = (field: EditableCompensationField) => {
     const value = compensation[field];
     setEditingField(field);
-    setEditStartValue(value);
     setEditValue(field === 'gross' ? value.toFixed(2) : formatPercentBps(value));
   };
 
   const commitCompensationEdit = () => {
+    if (!editingField) {
+      return;
+    }
+
+    if (editingField === 'gross') {
+      const nextGross = parseAmountInput(editValue);
+      if (nextGross !== compensation.gross) {
+        onCompensationChange((prev) => ({ ...prev, gross: nextGross }));
+      }
+      clearCompensationEditState();
+      return;
+    }
+
+    const nextPercentBps = parsePercentBpsInput(editValue);
+    if (editingField === 'taxPercentBps') {
+      if (nextPercentBps !== compensation.taxPercentBps) {
+        onCompensationChange((prev) => ({ ...prev, taxPercentBps: nextPercentBps }));
+      }
+      clearCompensationEditState();
+      return;
+    }
+
+    if (nextPercentBps !== compensation.retirementPercentBps) {
+      onCompensationChange((prev) => ({ ...prev, retirementPercentBps: nextPercentBps }));
+    }
     clearCompensationEditState();
   };
 
   const cancelCompensationEdit = () => {
-    if (editingField && editStartValue !== null) {
-      onCompensationChange((prev) => ({
-        ...prev,
-        [editingField]: editStartValue
-      }));
-    }
     clearCompensationEditState();
   };
 
   const applyCompensationDraft = (raw: string) => {
-    if (!editingField) return;
-
     setEditValue(raw);
-    if (editingField === 'gross') {
-      onCompensationChange((prev) => ({ ...prev, gross: parseAmountInput(raw) }));
-      return;
-    }
-
-    const nextPercentBps = parsePercentBpsInput(raw);
-    if (editingField === 'taxPercentBps') {
-      onCompensationChange((prev) => ({ ...prev, taxPercentBps: nextPercentBps }));
-      return;
-    }
-
-    onCompensationChange((prev) => ({ ...prev, retirementPercentBps: nextPercentBps }));
   };
 
   const handleCompensationInputKeyDown = (
@@ -247,7 +249,6 @@ export function BudgetHeader({
     if (event.key === 'Escape') {
       event.preventDefault();
       cancelCompensationEdit();
-      (event.currentTarget as HTMLInputElement).blur();
     }
   };
 
@@ -291,6 +292,54 @@ export function BudgetHeader({
   };
 
   const percentAllocated = takeHome > 0 ? (allocated / takeHome) * 100 : 0;
+
+  const renderEditableCompValue = (
+    field: EditableCompensationField,
+    readValue: string,
+    inputLabel: string,
+    editButtonLabel: string,
+    maxSize: number,
+    extraInputClasses = ''
+  ) => {
+    const isEditing = editingField === field;
+    const displayValue = isEditing ? editValue : readValue;
+    const inputClasses = ['budget-comp-input-inline', extraInputClasses, 'budget-inline-edit-input']
+      .filter(Boolean)
+      .join(' ');
+
+    if (isEditing) {
+      return (
+        <input
+          ref={compensationInputRef}
+          type="text"
+          className={inputClasses}
+          value={editValue}
+          size={Math.min(Math.max(editValue.length, 4), maxSize)}
+          enterKeyHint="done"
+          autoCapitalize="off"
+          autoComplete="off"
+          spellCheck={false}
+          onInput={(e) => applyCompensationDraft((e.target as HTMLInputElement).value)}
+          onBlur={commitCompensationEdit}
+          onKeyDown={handleCompensationInputKeyDown}
+          aria-label={inputLabel}
+        />
+      );
+    }
+
+    return (
+      <span
+        role="button"
+        tabIndex={0}
+        className="budget-comp-value budget-comp-value-clickable budget-equation-inline-value"
+        onClick={() => beginCompensationEdit(field)}
+        onKeyDown={(event) => handleCompensationValueKeyDown(event, field)}
+        aria-label={editButtonLabel}
+      >
+        {displayValue}
+      </span>
+    );
+  };
 
   return (
     <div className="budget-header">
@@ -343,132 +392,99 @@ export function BudgetHeader({
       )}
 
       <div className="budget-header-equation" aria-label="Compensation equation">
-        <div className="budget-equation-line">
-          <span className="budget-equation-term budget-equation-term-gross">
-            <span className="budget-equation-inline-label">Gross</span>
-            {editingField === 'gross' ? (
-              <input
-                ref={compensationInputRef}
-                type="text"
-                inputMode="decimal"
-                className="budget-comp-input-inline budget-inline-edit-input"
-                value={editValue}
-                size={Math.min(Math.max(editValue.length, 4), 14)}
-                onInput={(e) => applyCompensationDraft((e.target as HTMLInputElement).value)}
-                onBlur={commitCompensationEdit}
-                onKeyDown={handleCompensationInputKeyDown}
-                aria-label="Gross pay"
-              />
-            ) : (
-              <span
-                role="button"
-                tabIndex={0}
-                className="budget-comp-value budget-comp-value-clickable budget-equation-inline-value"
-                onClick={() => beginCompensationEdit('gross')}
-                onKeyDown={(event) => handleCompensationValueKeyDown(event, 'gross')}
-                aria-label="Edit gross pay"
-              >
-                {formatCurrencyRead(compensationComputation.gross)}
+        <div className="budget-equation-scroll">
+          <div className="budget-equation-line">
+            <span className="budget-equation-term budget-equation-term-gross">
+              <span className="budget-equation-inline-label">Gross</span>
+              <span className="budget-equation-inline-group">
+                {renderEditableCompValue(
+                  'gross',
+                  formatCurrencyRead(compensationComputation.gross),
+                  'Gross pay',
+                  'Edit gross pay',
+                  14
+                )}
               </span>
-            )}
-          </span>
-
-          <span className="budget-equation-op" aria-hidden="true">-</span>
-
-          <span className="budget-equation-term budget-equation-term-tax">
-            <span className="budget-equation-inline-label">Tax</span>
-            <span className="budget-equation-inline-group">
-              <span className="budget-equation-paren" aria-hidden="true">(</span>
-              {editingField === 'taxPercentBps' ? (
-                <input
-                  ref={compensationInputRef}
-                  type="text"
-                  inputMode="decimal"
-                  className="budget-comp-input-inline budget-comp-input-inline-percent budget-inline-edit-input"
-                  value={editValue}
-                  size={Math.min(Math.max(editValue.length, 4), 7)}
-                  onInput={(e) => applyCompensationDraft((e.target as HTMLInputElement).value)}
-                  onBlur={commitCompensationEdit}
-                  onKeyDown={handleCompensationInputKeyDown}
-                  aria-label="Tax percent"
-                />
-              ) : (
-                <span
-                  role="button"
-                  tabIndex={0}
-                  className="budget-comp-value budget-comp-value-clickable budget-equation-inline-value"
-                  onClick={() => beginCompensationEdit('taxPercentBps')}
-                  onKeyDown={(event) => handleCompensationValueKeyDown(event, 'taxPercentBps')}
-                  aria-label="Edit tax percent"
-                >
-                  {formatPercentRead(compensation.taxPercentBps)}
-                </span>
-              )}
-              <span className="budget-equation-equals" aria-hidden="true">=</span>
-              <span className="budget-equation-inline-value">{formatCurrencyRead(compensationComputation.taxAmount)}</span>
-              <span className="budget-equation-paren" aria-hidden="true">)</span>
             </span>
-          </span>
 
-          <span className="budget-equation-op" aria-hidden="true">-</span>
-
-          <span className="budget-equation-term budget-equation-term-retirement">
-            <span className="budget-equation-inline-label">Retirement</span>
-            <span className="budget-equation-inline-group">
-              <span className="budget-equation-paren" aria-hidden="true">(</span>
-              {editingField === 'retirementPercentBps' ? (
-                <input
-                  ref={compensationInputRef}
-                  type="text"
-                  inputMode="decimal"
-                  className="budget-comp-input-inline budget-comp-input-inline-percent budget-inline-edit-input"
-                  value={editValue}
-                  size={Math.min(Math.max(editValue.length, 4), 7)}
-                  onInput={(e) => applyCompensationDraft((e.target as HTMLInputElement).value)}
-                  onBlur={commitCompensationEdit}
-                  onKeyDown={handleCompensationInputKeyDown}
-                  aria-label="Retirement percent"
-                />
-              ) : (
-                <span
-                  role="button"
-                  tabIndex={0}
-                  className="budget-comp-value budget-comp-value-clickable budget-equation-inline-value"
-                  onClick={() => beginCompensationEdit('retirementPercentBps')}
-                  onKeyDown={(event) => handleCompensationValueKeyDown(event, 'retirementPercentBps')}
-                  aria-label="Edit retirement percent"
-                >
-                  {formatPercentRead(compensation.retirementPercentBps)}
-                </span>
-              )}
-              <span className="budget-equation-equals" aria-hidden="true">=</span>
-              <span className="budget-equation-inline-value">{formatCurrencyRead(compensationComputation.retirementAmount)}</span>
-              <span className="budget-equation-paren" aria-hidden="true">)</span>
+            <span className="budget-equation-glyph budget-equation-op" aria-hidden="true">
+              <span className="budget-equation-glyph-label" />
+              <span className="budget-equation-glyph-value">-</span>
             </span>
-          </span>
 
-          <span className="budget-equation-op" aria-hidden="true">=</span>
-
-          <span className="budget-equation-term budget-equation-term-takehome">
-            <span className="budget-equation-inline-label">Take-home</span>
-            <span className="budget-equation-inline-value">{formatCurrencyRead(compensationComputation.takeHome)}</span>
-          </span>
-
-          <span className="budget-equation-separator" aria-hidden="true">|</span>
-
-          <span className="budget-equation-term budget-equation-term-allocated">
-            <span className="budget-equation-inline-label">Allocated</span>
-            <span className="budget-equation-inline-value">
-              {formatCurrencyStats(allocated)} <span className="budget-equation-inline-percent">({percentAllocated.toFixed(0)}%)</span>
+            <span className="budget-equation-term budget-equation-term-tax">
+              <span className="budget-equation-inline-label">Tax</span>
+              <span className="budget-equation-inline-group">
+                <span className="budget-equation-paren" aria-hidden="true">(</span>
+                {renderEditableCompValue(
+                  'taxPercentBps',
+                  formatPercentRead(compensation.taxPercentBps),
+                  'Tax percent',
+                  'Edit tax percent',
+                  7,
+                  'budget-comp-input-inline-percent'
+                )}
+                <span className="budget-equation-equals" aria-hidden="true">=</span>
+                <span className="budget-equation-inline-value">{formatCurrencyRead(compensationComputation.taxAmount)}</span>
+                <span className="budget-equation-paren" aria-hidden="true">)</span>
+              </span>
             </span>
-          </span>
 
-          <span className="budget-equation-separator" aria-hidden="true">|</span>
+            <span className="budget-equation-glyph budget-equation-op" aria-hidden="true">
+              <span className="budget-equation-glyph-label" />
+              <span className="budget-equation-glyph-value">-</span>
+            </span>
 
-          <span className={`budget-equation-term budget-equation-term-remaining ${unallocated < 0 ? 'negative' : ''}`}>
-            <span className="budget-equation-inline-label">{unallocated >= 0 ? 'Remaining' : 'Over Budget'}</span>
-            <span className="budget-equation-inline-value">{formatCurrencyStats(Math.abs(unallocated))}</span>
-          </span>
+            <span className="budget-equation-term budget-equation-term-retirement">
+              <span className="budget-equation-inline-label">Retirement</span>
+              <span className="budget-equation-inline-group">
+                <span className="budget-equation-paren" aria-hidden="true">(</span>
+                {renderEditableCompValue(
+                  'retirementPercentBps',
+                  formatPercentRead(compensation.retirementPercentBps),
+                  'Retirement percent',
+                  'Edit retirement percent',
+                  7,
+                  'budget-comp-input-inline-percent'
+                )}
+                <span className="budget-equation-equals" aria-hidden="true">=</span>
+                <span className="budget-equation-inline-value">{formatCurrencyRead(compensationComputation.retirementAmount)}</span>
+                <span className="budget-equation-paren" aria-hidden="true">)</span>
+              </span>
+            </span>
+
+            <span className="budget-equation-glyph budget-equation-op" aria-hidden="true">
+              <span className="budget-equation-glyph-label" />
+              <span className="budget-equation-glyph-value">=</span>
+            </span>
+
+            <span className="budget-equation-term budget-equation-term-takehome">
+              <span className="budget-equation-inline-label">Take-home</span>
+              <span className="budget-equation-inline-value">{formatCurrencyRead(compensationComputation.takeHome)}</span>
+            </span>
+
+            <span className="budget-equation-glyph budget-equation-separator" aria-hidden="true">
+              <span className="budget-equation-glyph-label" />
+              <span className="budget-equation-glyph-value">|</span>
+            </span>
+
+            <span className="budget-equation-term budget-equation-term-allocated">
+              <span className="budget-equation-inline-label">Allocated</span>
+              <span className="budget-equation-inline-value">
+                {formatCurrencyStats(allocated)} <span className="budget-equation-inline-percent">({percentAllocated.toFixed(0)}%)</span>
+              </span>
+            </span>
+
+            <span className="budget-equation-glyph budget-equation-separator" aria-hidden="true">
+              <span className="budget-equation-glyph-label" />
+              <span className="budget-equation-glyph-value">|</span>
+            </span>
+
+            <span className={`budget-equation-term budget-equation-term-remaining ${unallocated < 0 ? 'negative' : ''}`}>
+              <span className="budget-equation-inline-label">{unallocated >= 0 ? 'Remaining' : 'Over Budget'}</span>
+              <span className="budget-equation-inline-value">{formatCurrencyStats(Math.abs(unallocated))}</span>
+            </span>
+          </div>
         </div>
       </div>
 
