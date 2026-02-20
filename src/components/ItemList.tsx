@@ -13,12 +13,9 @@ interface ItemListProps {
   onAddItem: (tag: string, name: string, amount: number) => void;
   onDeleteItem: (index: number) => void;
   onReorderItem: (fromIndex: number, toIndex: number) => void;
-  onReorderAll: (newItems: BudgetItem[]) => void;
 }
 
 type EditingField = { index: number; field: 'tag' | 'name' | 'amount' } | null;
-
-type SortOption = 'none' | 'amount-desc' | 'amount-asc' | 'tag' | 'name';
 
 // Capitalize first letter of a string
 const capitalizeFirst = (str: string) => {
@@ -49,8 +46,7 @@ export function ItemList({
   onItemUpdate, 
   onAddItem, 
   onDeleteItem, 
-  onReorderItem,
-  onReorderAll
+  onReorderItem
 }: ItemListProps) {
   // Get color for tag (custom colors override defaults)
   const getColor = (tag: string) => {
@@ -75,27 +71,6 @@ export function ItemList({
 
   const setItemRef = (index: number) => (el: HTMLDivElement | null) => {
     itemRefs.current[index] = el;
-  };
-
-  const handleSort = (sortBy: SortOption) => {
-    if (disabled) return;
-    if (sortBy === 'none') return;
-    
-    const sorted = [...items].sort((a, b) => {
-      switch (sortBy) {
-        case 'amount-desc':
-          return b.amount - a.amount;
-        case 'amount-asc':
-          return a.amount - b.amount;
-        case 'tag':
-          return a.tag.localeCompare(b.tag);
-        case 'name':
-          return a.name.localeCompare(b.name);
-        default:
-          return 0;
-      }
-    });
-    onReorderAll(sorted);
   };
 
   useEffect(() => {
@@ -485,13 +460,6 @@ export function ItemList({
           {disabledMessage}
         </div>
       )}
-      <div className="budget-sort-controls">
-        <span className="budget-sort-label">Sort:</span>
-        <button className="budget-sort-btn" disabled={disabled} onClick={() => handleSort('amount-desc')}>$ High→Low</button>
-        <button className="budget-sort-btn" disabled={disabled} onClick={() => handleSort('amount-asc')}>$ Low→High</button>
-        <button className="budget-sort-btn" disabled={disabled} onClick={() => handleSort('tag')}>Tag</button>
-        <button className="budget-sort-btn" disabled={disabled} onClick={() => handleSort('name')}>Name</button>
-      </div>
       {items.map((item, index) => (
         <div
           ref={setItemRef(index)}

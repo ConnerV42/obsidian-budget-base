@@ -1,3 +1,5 @@
+import type { ItemSortOption } from '../sorting';
+
 export interface BudgetDashboardPaneMenuFile {
   path: string;
 }
@@ -16,6 +18,8 @@ export interface BudgetDashboardPaneMenuOptions<TFile extends BudgetDashboardPan
   onOpenSourceNote: (file: TFile) => Promise<void> | void;
   canCreateNextMonth: (file: TFile) => boolean;
   onCreateNextMonth: (file: TFile) => Promise<void> | void;
+  canSortItems: (file: TFile) => boolean;
+  onSortItems: (file: TFile, sortBy: ItemSortOption) => Promise<void> | void;
 }
 
 export function addBudgetDashboardPaneMenuItems<TFile extends BudgetDashboardPaneMenuFile>(
@@ -27,6 +31,27 @@ export function addBudgetDashboardPaneMenuItems<TFile extends BudgetDashboardPan
     return;
   }
 
+  const canCreateNextMonth = options.canCreateNextMonth(file);
+  const canSortItems = options.canSortItems(file);
+
+  if (canSortItems) {
+    const sortMenuItems: Array<{ title: string; sortBy: ItemSortOption }> = [
+      { title: 'Sort items: $ High to Low', sortBy: 'amount-desc' },
+      { title: 'Sort items: $ Low to High', sortBy: 'amount-asc' },
+      { title: 'Sort items: Tag (A to Z)', sortBy: 'tag' },
+      { title: 'Sort items: Name (A to Z)', sortBy: 'name' }
+    ];
+
+    for (const sortAction of sortMenuItems) {
+      menu.addItem((item) => item
+        .setTitle(sortAction.title)
+        .setIcon('arrow-down-up')
+        .onClick(() => {
+          void options.onSortItems(file, sortAction.sortBy);
+        }));
+    }
+  }
+
   menu.addItem((item) => item
     .setTitle('Open budget source note')
     .setIcon('file-text')
@@ -34,7 +59,7 @@ export function addBudgetDashboardPaneMenuItems<TFile extends BudgetDashboardPan
       void options.onOpenSourceNote(file);
     }));
 
-  if (!options.canCreateNextMonth(file)) {
+  if (!canCreateNextMonth) {
     return;
   }
 

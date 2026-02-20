@@ -30,7 +30,6 @@ interface BudgetViewProps {
 }
 
 type MobilePanel = 'list' | 'chart';
-type SortOption = 'none' | 'amount-desc' | 'amount-asc' | 'tag' | 'name';
 
 const MOBILE_LAYOUT_QUERY = '(max-width: 768px), (pointer: coarse)';
 const DEFAULT_SPLIT_RATIO = 0.34;
@@ -166,7 +165,6 @@ export function BudgetView({
   onResolveConflict
 }: BudgetViewProps) {
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>('list');
-  const [mobileSortOption, setMobileSortOption] = useState<SortOption>('none');
   const [isMobileLayout, setIsMobileLayout] = useState<boolean>(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
       return false;
@@ -532,7 +530,6 @@ export function BudgetView({
 
   const handleReorderItem = (fromIndex: number, toIndex: number) => {
     if (allocationsLocked) return;
-    setMobileSortOption('none');
     onUpdate((prev) => {
       const prevItems = flattenItems(prev);
       const newItems = [...prevItems];
@@ -542,43 +539,6 @@ export function BudgetView({
       return {
         ...prev,
         categories: [{ name: 'Items', items: newItems }]
-      };
-    });
-  };
-
-  const handleReorderAll = (newItems: BudgetItem[]) => {
-    if (allocationsLocked) return;
-    setMobileSortOption('none');
-    onUpdate((prev) => ({
-      ...prev,
-      categories: [{ name: 'Items', items: newItems }]
-    }));
-  };
-
-  const sortItems = (sortBy: SortOption) => {
-    if (allocationsLocked) return;
-    if (sortBy === 'none') return;
-
-    onUpdate((prev) => {
-      const prevItems = flattenItems(prev);
-      const sorted = [...prevItems].sort((a, b) => {
-        switch (sortBy) {
-          case 'amount-desc':
-            return b.amount - a.amount;
-          case 'amount-asc':
-            return a.amount - b.amount;
-          case 'tag':
-            return a.tag.localeCompare(b.tag);
-          case 'name':
-            return a.name.localeCompare(b.name);
-          default:
-            return 0;
-        }
-      });
-
-      return {
-        ...prev,
-        categories: [{ name: 'Items', items: sorted }]
       };
     });
   };
@@ -919,28 +879,6 @@ export function BudgetView({
         </button>
       )}
 
-      {isMobileLayout && mobilePanel === 'list' && (
-        <div className="budget-mobile-control-bar">
-          <select
-            className="budget-mobile-sort-select"
-            aria-label="Sort items"
-            disabled={allocationsLocked}
-            value={mobileSortOption}
-            onChange={(e) => {
-              const sortBy = (e.target as HTMLSelectElement).value as SortOption;
-              setMobileSortOption(sortBy);
-              sortItems(sortBy);
-            }}
-          >
-            <option value="none">Manual Order</option>
-            <option value="amount-desc">$ High to Low</option>
-            <option value="amount-asc">$ Low to High</option>
-            <option value="tag">Tag (A to Z)</option>
-            <option value="name">Name (A to Z)</option>
-          </select>
-        </div>
-      )}
-
       <div
         ref={flowBodyRef}
         className={`budget-flow-body ${!isMobileLayout ? 'desktop-resizable' : ''}`}
@@ -956,7 +894,6 @@ export function BudgetView({
               onAddItem={handleAddItem}
               onDeleteItem={handleDeleteItem}
               onReorderItem={handleReorderItem}
-              onReorderAll={handleReorderAll}
             />
           </div>
         )}

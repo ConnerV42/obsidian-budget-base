@@ -1,5 +1,6 @@
 import { FileView } from 'obsidian';
 import type { IconName, Menu, TFile, WorkspaceLeaf } from 'obsidian';
+import type { ItemSortOption } from '../sorting';
 import { addBudgetDashboardPaneMenuItems } from './budgetDashboardPaneMenu';
 
 export const BUDGET_DASHBOARD_VIEW_TYPE = 'budgetbase-dashboard';
@@ -16,6 +17,8 @@ export interface BudgetDashboardViewOptions {
   onOpenSourceNote: (file: TFile) => Promise<void> | void;
   canCreateNextMonth: (file: TFile) => boolean;
   onCreateNextMonth: (file: TFile) => Promise<void> | void;
+  canSortItems: (file: TFile) => boolean;
+  onSortItems: (file: TFile, sortBy: ItemSortOption) => Promise<void> | void;
 }
 
 export class BudgetDashboardView extends FileView {

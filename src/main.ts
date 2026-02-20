@@ -4,6 +4,7 @@ import { h, render } from 'preact';
 import { BudgetView } from './components/BudgetView';
 import { parseBudgetMarkdown, BudgetData, serializeBudgetMarkdown } from './parser';
 import { BudgetFlowSettings, DEFAULT_SETTINGS, BudgetFlowSettingTab } from './settings';
+import { ItemSortOption, sortBudgetItems } from './sorting';
 import { StateUpdate } from './writeQueue';
 import {
   BudgetConflictState,
@@ -40,6 +41,7 @@ export default class BudgetFlowPlugin extends Plugin {
   private persistedConflictsByFilePath: PersistedBudgetConflictsByPath = {};
   private bypassedAutoSwitchFilePaths = new Set<string>();
   private nextMonthEligibleFilePaths = new Set<string>();
+  private sortEligibleFilePaths = new Set<string>();
   private nextMonthCreationInFlight = new Set<string>();
 
   async onload() {
@@ -95,6 +97,10 @@ export default class BudgetFlowPlugin extends Plugin {
         canCreateNextMonth: (file) => this.canCreateNextMonthFromFile(file),
         onCreateNextMonth: (file) => {
           void this.createNextMonthBudgetFromFile(file);
+        },
+        canSortItems: (file) => this.canSortItemsFromFile(file),
+        onSortItems: (file, sortBy) => {
+          void this.sortItemsForFilePath(file.path, sortBy);
         }
       })
     );
@@ -144,6 +150,7 @@ export default class BudgetFlowPlugin extends Plugin {
     console.log('Unloading BudgetBase plugin');
     this.app.workspace.detachLeavesOfType(BUDGET_DASHBOARD_VIEW_TYPE);
     this.nextMonthEligibleFilePaths.clear();
+    this.sortEligibleFilePaths.clear();
     this.nextMonthCreationInFlight.clear();
     if (this.budgetPersistence) {
       this.budgetPersistence.dispose();
@@ -202,6 +209,7 @@ export default class BudgetFlowPlugin extends Plugin {
     const budgetData = parseBudgetMarkdown(content);
     if (!budgetData || budgetData.type !== 'budget') {
       this.setNextMonthEligibility(file.path, false);
+      this.setSortEligibility(file.path, false);
       const restoredConflictData = this.budgetPersistence.getLatestDataFromConflict(file.path, content);
       if (!isCurrent()) {
         return;
@@ -213,6 +221,7 @@ export default class BudgetFlowPlugin extends Plugin {
         return;
       }
 
+      this.setSortEligibility(file.path, Boolean(restoredConflictData.compensation));
       this.renderBudgetView(container, file, restoredConflictData);
       return;
     }
@@ -223,6 +232,7 @@ export default class BudgetFlowPlugin extends Plugin {
     }
 
     this.setNextMonthEligibility(file.path, true);
+    this.setSortEligibility(file.path, Boolean(latestData.compensation));
     this.renderBudgetView(container, file, latestData);
   }
 
@@ -271,6 +281,7 @@ export default class BudgetFlowPlugin extends Plugin {
   private renderNonBudgetFallback(container: HTMLElement, file: TFile) {
     this.clearDashboardContainer(container);
     this.setNextMonthEligibility(file.path, false);
+    this.setSortEligibility(file.path, false);
 
     const message = document.createElement('div');
     message.className = 'budgetbase-dashboard-empty';
@@ -421,6 +432,14 @@ export default class BudgetFlowPlugin extends Plugin {
     return this.nextMonthEligibleFilePaths.has(file.path);
   }
 
+  private canSortItemsFromFile(file: TFile): boolean {
+    if (!file.path) {
+      return false;
+    }
+
+    return this.sortEligibleFilePaths.has(file.path);
+  }
+
   private setNextMonthEligibility(filePath: string, isEligible: boolean): void {
     if (isEligible) {
       this.nextMonthEligibleFilePaths.add(filePath);
@@ -428,6 +447,48 @@ export default class BudgetFlowPlugin extends Plugin {
     }
 
     this.nextMonthEligibleFilePaths.delete(filePath);
+  }
+
+  private setSortEligibility(filePath: string, isEligible: boolean): void {
+    if (isEligible) {
+      this.sortEligibleFilePaths.add(filePath);
+      return;
+    }
+
+    this.sortEligibleFilePaths.delete(filePath);
+  }
+
+  private async sortItemsForFilePath(filePath: string, sortBy: ItemSortOption): Promise<void> {
+    const abstractFile = this.app.vault.getAbstractFileByPath(filePath);
+    if (!(abstractFile instanceof TFile)) {
+      return;
+    }
+
+    const latestBudget = await this.resolveLatestBudgetSnapshotForFile(abstractFile);
+    if (!latestBudget || !latestBudget.compensation) {
+      return;
+    }
+
+    await this.budgetPersistence.updateBudgetFile(abstractFile, (prev) => {
+      if (!prev.compensation) {
+        return prev;
+      }
+
+      const previousItems = flattenBudgetItems(prev);
+      const sortedItems = sortBudgetItems(previousItems, sortBy);
+      const alreadySorted = sortedItems.every((item, index) => item === previousItems[index]);
+      if (alreadySorted) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        categories: [{
+          name: 'Items',
+          items: sortedItems.map((item) => ({ ...item }))
+        }]
+      };
+    });
   }
 
   private async resolveLatestBudgetSnapshotForFile(file: TFile): Promise<BudgetData | null> {
@@ -503,6 +564,10 @@ export default class BudgetFlowPlugin extends Plugin {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function flattenBudgetItems(data: BudgetData) {
+  return data.categories.flatMap((category) => category.items);
 }
 
 function isBudgetWriteConflict(value: unknown): value is BudgetWriteConflict {

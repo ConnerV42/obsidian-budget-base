@@ -54,18 +54,21 @@ describe('addBudgetDashboardPaneMenuItems', () => {
       {
         onOpenSourceNote: vi.fn(),
         canCreateNextMonth: vi.fn(() => true),
-        onCreateNextMonth: vi.fn()
+        onCreateNextMonth: vi.fn(),
+        canSortItems: vi.fn(() => true),
+        onSortItems: vi.fn()
       }
     );
 
     expect(menu.items).toHaveLength(0);
   });
 
-  it('adds only source-note action when next-month is not eligible', () => {
+  it('adds only source-note action when next-month and sorting are not eligible', () => {
     const menu = new MockMenu();
     const file = makeFile('finance/2026-02-budget.md');
     const onOpenSourceNote = vi.fn(async () => {});
     const canCreateNextMonth = vi.fn(() => false);
+    const canSortItems = vi.fn(() => false);
 
     addBudgetDashboardPaneMenuItems(
       menu as unknown as BudgetDashboardPaneMenu,
@@ -73,11 +76,14 @@ describe('addBudgetDashboardPaneMenuItems', () => {
       {
         onOpenSourceNote,
         canCreateNextMonth,
-        onCreateNextMonth: vi.fn()
+        onCreateNextMonth: vi.fn(),
+        canSortItems,
+        onSortItems: vi.fn()
       }
     );
 
     expect(canCreateNextMonth).toHaveBeenCalledWith(file);
+    expect(canSortItems).toHaveBeenCalledWith(file);
     expect(menu.items).toHaveLength(1);
     expect(menu.items[0].title).toBe('Open budget source note');
     expect(menu.items[0].icon).toBe('file-text');
@@ -86,11 +92,41 @@ describe('addBudgetDashboardPaneMenuItems', () => {
     expect(onOpenSourceNote).toHaveBeenCalledWith(file);
   });
 
-  it('adds both pane-menu actions and invokes handlers with the active file', () => {
+  it('adds source-note and sort actions when sorting is eligible', () => {
+    const menu = new MockMenu();
+    const file = makeFile('finance/2026-02-budget.md');
+    const onOpenSourceNote = vi.fn(async () => {});
+    const onSortItems = vi.fn(async () => {});
+
+    addBudgetDashboardPaneMenuItems(
+      menu as unknown as BudgetDashboardPaneMenu,
+      file,
+      {
+        onOpenSourceNote,
+        canCreateNextMonth: () => false,
+        onCreateNextMonth: vi.fn(),
+        canSortItems: () => true,
+        onSortItems
+      }
+    );
+
+    expect(menu.items).toHaveLength(5);
+    expect(menu.items[0].title).toBe('Sort items: $ High to Low');
+    expect(menu.items[1].title).toBe('Sort items: $ Low to High');
+    expect(menu.items[2].title).toBe('Sort items: Tag (A to Z)');
+    expect(menu.items[3].title).toBe('Sort items: Name (A to Z)');
+    expect(menu.items[4].title).toBe('Open budget source note');
+
+    menu.items[3].clickHandler?.({} as unknown as MouseEvent);
+    expect(onSortItems).toHaveBeenCalledWith(file, 'name');
+  });
+
+  it('adds source-note, next-month, and sort actions and invokes handlers', () => {
     const menu = new MockMenu();
     const file = makeFile('finance/2026-02-budget.md');
     const onOpenSourceNote = vi.fn(async () => {});
     const onCreateNextMonth = vi.fn(async () => {});
+    const onSortItems = vi.fn(async () => {});
 
     addBudgetDashboardPaneMenuItems(
       menu as unknown as BudgetDashboardPaneMenu,
@@ -98,20 +134,29 @@ describe('addBudgetDashboardPaneMenuItems', () => {
       {
         onOpenSourceNote,
         canCreateNextMonth: () => true,
-        onCreateNextMonth
+        onCreateNextMonth,
+        canSortItems: () => true,
+        onSortItems
       }
     );
 
-    expect(menu.items).toHaveLength(2);
-    expect(menu.items[0].title).toBe('Open budget source note');
-    expect(menu.items[0].icon).toBe('file-text');
-    expect(menu.items[1].title).toBe('Create next month budget');
-    expect(menu.items[1].icon).toBe('copy');
+    expect(menu.items).toHaveLength(6);
+    expect(menu.items[0].title).toBe('Sort items: $ High to Low');
+    expect(menu.items[1].title).toBe('Sort items: $ Low to High');
+    expect(menu.items[2].title).toBe('Sort items: Tag (A to Z)');
+    expect(menu.items[3].title).toBe('Sort items: Name (A to Z)');
+    expect(menu.items[4].title).toBe('Open budget source note');
+    expect(menu.items[4].icon).toBe('file-text');
+    expect(menu.items[5].title).toBe('Create next month budget');
+    expect(menu.items[5].icon).toBe('copy');
 
-    menu.items[0].clickHandler?.({} as unknown as MouseEvent);
+    menu.items[4].clickHandler?.({} as unknown as MouseEvent);
     expect(onOpenSourceNote).toHaveBeenCalledWith(file);
 
-    menu.items[1].clickHandler?.({} as unknown as MouseEvent);
+    menu.items[5].clickHandler?.({} as unknown as MouseEvent);
     expect(onCreateNextMonth).toHaveBeenCalledWith(file);
+
+    menu.items[0].clickHandler?.({} as unknown as MouseEvent);
+    expect(onSortItems).toHaveBeenCalledWith(file, 'amount-desc');
   });
 });
