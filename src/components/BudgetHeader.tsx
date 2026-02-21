@@ -309,34 +309,38 @@ export function BudgetHeader({
 
     if (isEditing) {
       return (
-        <input
-          ref={compensationInputRef}
-          type="text"
-          className={inputClasses}
-          value={editValue}
-          size={Math.min(Math.max(editValue.length, 4), maxSize)}
-          enterKeyHint="done"
-          autoCapitalize="off"
-          autoComplete="off"
-          spellCheck={false}
-          onInput={(e) => applyCompensationDraft((e.target as HTMLInputElement).value)}
-          onBlur={commitCompensationEdit}
-          onKeyDown={handleCompensationInputKeyDown}
-          aria-label={inputLabel}
-        />
+        <span className="budget-comp-edit-slot">
+          <input
+            ref={compensationInputRef}
+            type="text"
+            className={inputClasses}
+            value={editValue}
+            size={Math.min(Math.max(editValue.length, 4), maxSize)}
+            enterKeyHint="done"
+            autoCapitalize="off"
+            autoComplete="off"
+            spellCheck={false}
+            onInput={(e) => applyCompensationDraft((e.target as HTMLInputElement).value)}
+            onBlur={commitCompensationEdit}
+            onKeyDown={handleCompensationInputKeyDown}
+            aria-label={inputLabel}
+          />
+        </span>
       );
     }
 
     return (
-      <span
-        role="button"
-        tabIndex={0}
-        className="budget-comp-value budget-comp-value-clickable budget-equation-inline-value"
-        onClick={() => beginCompensationEdit(field)}
-        onKeyDown={(event) => handleCompensationValueKeyDown(event, field)}
-        aria-label={editButtonLabel}
-      >
-        {displayValue}
+      <span className="budget-comp-edit-slot">
+        <span
+          role="button"
+          tabIndex={0}
+          className="budget-comp-read-proxy budget-comp-value budget-comp-value-clickable budget-equation-inline-value"
+          onClick={() => beginCompensationEdit(field)}
+          onKeyDown={(event) => handleCompensationValueKeyDown(event, field)}
+          aria-label={editButtonLabel}
+        >
+          {displayValue}
+        </span>
       </span>
     );
   };

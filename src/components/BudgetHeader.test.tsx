@@ -98,9 +98,15 @@ describe('BudgetHeader compensation equation', () => {
   it('uses full keyboard editing attrs and only commits compensation on blur', () => {
     render(<BudgetHeaderHarness />);
     const equation = screen.getByLabelText('Compensation equation');
+    const grossTerm = equation.querySelector('.budget-equation-term-gross') as HTMLElement;
+
+    expect(grossTerm.querySelector('.budget-comp-edit-slot')).toBeTruthy();
+    expect(grossTerm.querySelector('.budget-comp-read-proxy')).toBeTruthy();
 
     fireEvent.click(within(equation).getByRole('button', { name: 'Edit gross pay' }));
     const grossInput = screen.getByLabelText('Gross pay') as HTMLInputElement;
+    expect(grossTerm.querySelector('.budget-comp-edit-slot')).toBeTruthy();
+    expect(grossTerm.querySelector('.budget-comp-read-proxy')).toBeNull();
     expect(grossInput.getAttribute('inputmode')).toBeNull();
     expect(grossInput.getAttribute('enterkeyhint')).toBe('done');
 
@@ -186,6 +192,7 @@ describe('BudgetHeader compensation equation', () => {
     expect((takeHomeTerm as HTMLElement).querySelector('.budget-equation-inline-value')).toBeTruthy();
     expect((allocatedTerm as HTMLElement).querySelector('.budget-equation-inline-value')).toBeTruthy();
     expect((remainingTerm as HTMLElement).querySelector('.budget-equation-inline-value')).toBeTruthy();
+    expect((line as HTMLElement).querySelectorAll('.budget-comp-edit-slot').length).toBeGreaterThanOrEqual(3);
 
     expect(within(grossTerm as HTMLElement).getByRole('button', { name: 'Edit gross pay' })).toBeTruthy();
     expect(within(taxTerm as HTMLElement).getByRole('button', { name: 'Edit tax percent' })).toBeTruthy();

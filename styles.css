@@ -528,10 +528,11 @@ body.budget-resizing-splitter * {
     + var(--budget-eq-label-headroom)
   );
   --budget-eq-value-font-size: 1.06rem;
+  --budget-eq-edit-font-size: var(--budget-eq-value-font-size);
   --budget-eq-value-line-height: 1.1;
   --budget-eq-value-headroom: 0.18rem;
   --budget-eq-value-row-height: calc(
-    var(--budget-eq-value-font-size) * var(--budget-eq-value-line-height)
+    var(--budget-eq-edit-font-size) * var(--budget-eq-value-line-height)
     + var(--budget-eq-value-headroom)
   );
   --budget-eq-value-font-weight: 600;
@@ -541,7 +542,7 @@ body.budget-resizing-splitter * {
 
 .budget-equation-scroll {
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: visible;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   padding-bottom: 2px;
@@ -595,7 +596,7 @@ body.budget-resizing-splitter * {
   align-items: center;
   justify-content: center;
   min-height: var(--budget-eq-value-row-height);
-  font-size: var(--budget-eq-value-font-size);
+  font-size: var(--budget-eq-edit-font-size);
   font-weight: var(--budget-eq-value-font-weight);
   line-height: var(--budget-eq-value-line-height);
   color: var(--text-muted);
@@ -615,11 +616,11 @@ body.budget-resizing-splitter * {
 
 .budget-equation-inline-value {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   min-height: var(--budget-eq-value-row-height);
   gap: 4px;
   color: var(--text-normal);
-  font-size: var(--budget-eq-value-font-size);
+  font-size: var(--budget-eq-edit-font-size);
   font-weight: var(--budget-eq-value-font-weight);
   line-height: var(--budget-eq-value-line-height);
   font-variant-numeric: tabular-nums;
@@ -628,27 +629,39 @@ body.budget-resizing-splitter * {
 
 .budget-equation-inline-group {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   min-height: var(--budget-eq-value-row-height);
   gap: 4px;
-  font-size: var(--budget-eq-value-font-size);
+  font-size: var(--budget-eq-edit-font-size);
   font-weight: var(--budget-eq-value-font-weight);
   line-height: var(--budget-eq-value-line-height);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
+.budget-comp-edit-slot {
+  display: inline-grid;
+  align-items: center;
+  min-height: var(--budget-eq-value-row-height);
+}
+
+.budget-comp-read-proxy {
+  min-height: var(--budget-eq-value-row-height);
+  font-size: var(--budget-eq-edit-font-size);
+  font-weight: var(--budget-eq-value-font-weight);
+  line-height: var(--budget-eq-value-line-height);
+}
+
 .budget-comp-input-inline {
   display: inline-block;
-  vertical-align: baseline;
+  vertical-align: middle;
   color: var(--text-normal);
   font-family: var(--font-interface);
-  font-size: var(--budget-eq-value-font-size);
+  font-size: var(--budget-eq-edit-font-size);
   font-weight: var(--budget-eq-value-font-weight);
   line-height: var(--budget-eq-value-line-height);
   min-width: 4ch;
   min-height: var(--budget-eq-value-row-height);
-  height: var(--budget-eq-value-row-height);
   max-width: 14ch;
   margin: 0;
   padding: 0;
@@ -1526,8 +1539,9 @@ input[type="date"].budget-inline-edit-input:focus {
   }
 
   .budget-flow.mobile-layout .budget-header-equation {
-    --budget-eq-label-font-size: max(calc(0.56rem * var(--budget-mobile-scale)), 0.5rem);
+    --budget-eq-label-font-size: max(calc(0.66rem * var(--budget-mobile-scale)), 0.6rem);
     --budget-eq-value-font-size: max(calc(0.86rem * var(--budget-mobile-scale)), 0.74rem);
+    --budget-eq-edit-font-size: max(16px, var(--budget-eq-value-font-size));
     --budget-eq-label-line-height: 1.24;
     --budget-eq-value-line-height: 1.1;
     --budget-eq-label-headroom: max(calc(5px * var(--budget-mobile-scale)), 4px);
@@ -1537,7 +1551,7 @@ input[type="date"].budget-inline-edit-input:focus {
       + var(--budget-eq-label-headroom)
     );
     --budget-eq-value-row-height: calc(
-      var(--budget-eq-value-font-size) * var(--budget-eq-value-line-height)
+      var(--budget-eq-edit-font-size) * var(--budget-eq-value-line-height)
       + var(--budget-eq-value-headroom)
     );
     --budget-eq-row-gap: max(calc(3px * var(--budget-mobile-scale)), 2px);
@@ -1545,7 +1559,14 @@ input[type="date"].budget-inline-edit-input:focus {
   }
 
   .budget-flow.mobile-layout .budget-equation-scroll {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
     padding-bottom: calc(2px * var(--budget-mobile-scale));
+  }
+
+  .budget-flow.mobile-layout .budget-equation-scroll::-webkit-scrollbar {
+    display: none;
+    height: 0;
   }
 
   .budget-flow.mobile-layout .budget-equation-line {
@@ -1554,23 +1575,20 @@ input[type="date"].budget-inline-edit-input:focus {
 
   .budget-flow.mobile-layout .budget-equation-inline-label {
     font-size: var(--budget-eq-label-font-size);
+    font-weight: 500;
+    letter-spacing: 0.04em;
   }
 
   .budget-flow.mobile-layout .budget-equation-inline-value {
-    font-size: var(--budget-eq-value-font-size);
+    font-size: var(--budget-eq-edit-font-size);
   }
 
   .budget-flow.mobile-layout .budget-equation-inline-percent {
     font-size: max(calc(0.68rem * var(--budget-mobile-scale)), 0.6rem);
   }
 
-  .budget-flow.mobile-layout .budget-equation-op .budget-equation-glyph-value,
-  .budget-flow.mobile-layout .budget-equation-separator .budget-equation-glyph-value {
-    font-size: max(calc(0.72rem * var(--budget-mobile-scale)), 0.62rem);
-  }
-
   .budget-flow.mobile-layout .budget-comp-input-inline {
-    font-size: var(--budget-eq-value-font-size);
+    font-size: var(--budget-eq-edit-font-size);
   }
 
   .budget-flow.mobile-layout .budget-comp-input-inline-percent {
